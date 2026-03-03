@@ -96,20 +96,22 @@ export class UsersService {
                 data,
             });
 
-            if (updateUserDto.roleIds && updateUserDto.roleIds.length > 0) {
-                // Delete old roles
+            if (updateUserDto.roleIds !== undefined) {
+                // Delete old roles (this happens even if they pass an empty array to remove all roles)
                 await tx.userRole.deleteMany({
                     where: { userId: id }
                 });
 
-                // Insert new roles
-                await tx.userRole.createMany({
-                    data: updateUserDto.roleIds.map((roleId, index) => ({
-                        userId: id,
-                        roleId: roleId,
-                        isDefault: index === 0 // El primero será el default
-                    }))
-                });
+                // Insert new roles only if the array is not empty
+                if (updateUserDto.roleIds.length > 0) {
+                    await tx.userRole.createMany({
+                        data: updateUserDto.roleIds.map((roleId, index) => ({
+                            userId: id,
+                            roleId: roleId,
+                            isDefault: index === 0 // El primero será el default
+                        }))
+                    });
+                }
             }
 
             return tx.user.findUniqueOrThrow({
