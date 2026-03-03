@@ -1,0 +1,444 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id            String                @id @default(uuid())
+  name          String
+  active        Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  auditLogs     AuditEvent[]
+  cashMovements CashMovement[]
+  sessions      CashRegisterSession[]
+  expenses      Expense[]
+  lots          ProductionLot[]
+  products      Product[]
+  roles         Role[]
+  strains       Strain[]
+  users         User[]
+  appointments    Appointment[]
+  generatedReports GeneratedReport[]
+
+  @@map("organizations")
+}
+
+model Role {
+  id             String        @id @default(uuid())
+  organizationId String?
+  name           String
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  userRoles      UserRole[]
+
+  @@unique([organizationId, name])
+  @@map("roles")
+}
+
+model UserRole {
+  id        String  @id @default(uuid())
+  userId    String
+  roleId    String
+  isDefault Boolean @default(false)
+  role      Role    @relation(fields: [roleId], references: [id])
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model User {
+  id                     String                @id @default(uuid())
+  organizationId         String
+  email                  String?               @unique
+  passwordHash           String?
+  active                 Boolean               @default(true)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  resetPasswordExpires   DateTime?
+  resetPasswordToken     String?
+  hashedRefreshToken     String?
+  fullName               String
+  documentNumber         String
+  status                 PatientStatus         @default(ACTIVE)
+  dailyDose              Float?
+  performedAudits        AuditEvent[]
+  cashMovements          CashMovement[]
+  closedSessions         CashRegisterSession[] @relation("ClosedBy")
+  openedSessions         CashRegisterSession[] @relation("OpenedBy")
+  performedDispensations Dispensation[]        @relation("Performer")
+  dispensations          Dispensation[]        @relation("Recipient")
+  receivedPayments       Payment[]             @relation("Receiver")
+  payments               Payment[]
+  reprocanRecords        ReprocanRecord[]
+  stockMovements         StockMovement[]
+  userRoles              UserRole[]
+  appointments           Appointment[]
+  generatedReports       GeneratedReport[]
+  organization           Organization          @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, documentNumber])
+  @@map("users")
+}
+
+model ReprocanRecord {
+  id             String         @id @default(uuid())
+  patientId      String
+  reprocanNumber String
+  expirationDate DateTime?
+  status         ReprocanStatus @default(ACTIVE)
+  fileUrl        String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  patient        User           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("reprocan_records")
+}
+
+model Product {
+  id                  String                  @id @default(uuid())
+  organizationId      String
+  strainId            String
+  name                String
+  netPhysicalQuantity Float
+  equivalentDryGrams  Float
+  active              Boolean                 @default(true)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  currentStock        Float                   @default(0)
+  price               Float                   @default(0)
+  presentationType    ProductPresentationType
+  physicalUnitType    PhysicalUnitType
+  dispensationItems   DispensationItem[]
+  lots                ProductionLot[]
+  organization        Organization            @relation(fields: [organizationId], references: [id])
+  strain              Strain                  @relation(fields: [strainId], references: [id])
+
+  @@map("products")
+}
+
+model ProductionLot {
+  id                         String             @id @default(uuid())
+  organizationId             String
+  parentLotId                String?
+  strainId                   String
+  lotType                    LotType
+  lotCode                    String
+  status                     LotStatus          @default(CREATED)
+  totalOutputEquivalentGrams Float              @default(0)
+  totalProductionCost        Float              @default(0)
+  costPerEquivalentGram      Float              @default(0)
+  productId                  String?
+  createdAt                  DateTime           @default(now())
+  releasedAt                 DateTime?
+  dispensationItems          DispensationItem[]
+  costs                      ProductionCost[]
+  organization               Organization       @relation(fields: [organizationId], references: [id])
+  parentLot                  ProductionLot?     @relation("LotHierarchy", fields: [parentLotId], references: [id])
+  childLots                  ProductionLot[]    @relation("LotHierarchy")
+  product                    Product?           @relation(fields: [productId], references: [id])
+  strain                     Strain             @relation(fields: [strainId], references: [id])
+  stockMovements             StockMovement[]
+
+  @@map("production_lots")
+}
+
+model ProductionCost {
+  id              String        @id @default(uuid())
+  productionLotId String
+  costType        CostType
+  description     String?
+  amount          Float
+  createdAt       DateTime      @default(now())
+  productionLot   ProductionLot @relation(fields: [productionLotId], references: [id])
+
+  @@map("production_costs")
+}
+
+model StockMovement {
+  id                      String        @id @default(uuid())
+  organizationId          String
+  productionLotId         String
+  movementType            MovementType
+  quantityEquivalentGrams Float
+  referenceType           String?
+  referenceId             String?
+  createdById             String
+  createdAt               DateTime      @default(now())
+  createdBy               User          @relation(fields: [createdById], references: [id])
+  productionLot           ProductionLot @relation(fields: [productionLotId], references: [id])
+
+  @@map("stock_movements")
+}
+
+model Dispensation {
+  id                   String             @id @default(uuid())
+  organizationId       String
+  status               DispensationStatus @default(DRAFT)
+  totalEquivalentGrams Float              @default(0)
+  totalRecoveryAmount  Float              @default(0)
+  createdAt            DateTime           @default(now())
+  confirmedAt          DateTime?
+  performedById        String
+  recipientId          String
+  items                DispensationItem[]
+  performedBy          User               @relation("Performer", fields: [performedById], references: [id])
+  recipient            User               @relation("Recipient", fields: [recipientId], references: [id])
+  payments             Payment[]
+
+  @@map("dispensations")
+}
+
+model DispensationItem {
+  id                    String        @id @default(uuid())
+  dispensationId        String
+  productionLotId       String
+  productId             String
+  quantityUnits         Float
+  equivalentDryGrams    Float
+  costPerEquivalentGram Float
+  totalRecoveryAmount   Float
+  createdAt             DateTime      @default(now())
+  dispensation          Dispensation  @relation(fields: [dispensationId], references: [id])
+  product               Product       @relation(fields: [productId], references: [id])
+  productionLot         ProductionLot @relation(fields: [productionLotId], references: [id])
+
+  @@map("dispensation_items")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  organizationId String
+  dispensationId String?
+  amount         Float
+  status         PaymentStatus @default(PENDING)
+  paymentMethod  PaymentMethod
+  receivedById   String?
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  userId         String
+  dispensation   Dispensation? @relation(fields: [dispensationId], references: [id])
+  receivedBy     User?         @relation("Receiver", fields: [receivedById], references: [id])
+  user           User          @relation(fields: [userId], references: [id])
+
+  @@map("payments")
+}
+
+model CashRegisterSession {
+  id             String         @id @default(uuid())
+  organizationId String
+  openedById     String
+  closedById     String?
+  openingBalance Float
+  closingBalance Float?
+  status         String
+  openedAt       DateTime       @default(now())
+  closedAt       DateTime?
+  movements      CashMovement[]
+  closedBy       User?          @relation("ClosedBy", fields: [closedById], references: [id])
+  openedBy       User           @relation("OpenedBy", fields: [openedById], references: [id])
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+
+  @@map("cash_register_sessions")
+}
+
+model CashMovement {
+  id             String               @id @default(uuid())
+  organizationId String
+  sessionId      String?
+  movementType   CashMovementType
+  referenceType  String?
+  referenceId    String?
+  amount         Float
+  notes          String?
+  createdById    String
+  createdAt      DateTime             @default(now())
+  createdBy      User                 @relation(fields: [createdById], references: [id])
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  session        CashRegisterSession? @relation(fields: [sessionId], references: [id])
+
+  @@map("cash_movements")
+}
+
+model Strain {
+  id             String          @id @default(uuid())
+  organizationId String
+  name           String
+  genetics       String?
+  active         Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  cbdPercentage  Float?
+  thcPercentage  Float?
+  type           StrainType      @default(OTHER)
+  lots           ProductionLot[]
+  products       Product[]
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+
+  @@map("strains")
+}
+
+model Expense {
+  id             String       @id @default(uuid())
+  organizationId String
+  category       String
+  description    String?
+  amount         Float
+  paidAt         DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("expenses")
+}
+
+model AuditEvent {
+  id             String       @id @default(uuid())
+  organizationId String
+  entityType     String
+  entityId       String
+  action         String
+  previousData   Json?
+  newData        Json?
+  performedById  String
+  performedAt    DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  performedBy    User         @relation(fields: [performedById], references: [id])
+
+  @@map("audit_events")
+}
+
+enum PatientStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum LotType {
+  CULTIVATION
+  PACKAGING
+}
+
+enum LotStatus {
+  CREATED
+  TESTING
+  RELEASED
+  BLOCKED
+  DEPLETED
+}
+
+enum DispensationStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
+enum MovementType {
+  PRODUCTION
+  DISPENSATION
+  ADJUSTMENT
+}
+
+enum CostType {
+  ELECTRICITY
+  NUTRIENTS
+  LABOR
+  RENT
+  PACKAGING
+  OTHER
+}
+
+enum ReprocanStatus {
+  ACTIVE
+  EXPIRED
+  PENDING_RENEWAL
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  DEBIT_CARD
+  CREDIT_CARD
+  OTHER
+}
+
+enum CashMovementType {
+  INCOME
+  EXPENSE
+  ADJUSTMENT
+}
+
+enum StrainType {
+  INDICA
+  SATIVA
+  HYBRID
+  OTHER
+}
+
+enum ProductPresentationType {
+  FLOWER
+  OIL
+  EXTRACT
+  OTHER
+}
+
+enum PhysicalUnitType {
+  GRAMS
+  ML
+  UNIT
+}
+enum AppointmentStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model Appointment {
+  id             String            @id @default(uuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  
+  patientId      String
+  patient        User              @relation(fields: [patientId], references: [id])
+  
+  date           DateTime
+  reason         String
+  status         AppointmentStatus @default(PENDING)
+
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@map("appointments")
+}
+
+model GeneratedReport {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  type           ReportType
+  fileUrl        String?
+  fileSize       Int?
+  generatedById  String
+  createdAt      DateTime     @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  generatedBy    User         @relation(fields: [generatedById], references: [id])
+
+  @@map("generated_reports")
+}
+
+enum ReportType {
+  PATIENT_TRACEABILITY
+  CULTIVATION_BOOK
+  FINANCIAL_AUDIT
+}
