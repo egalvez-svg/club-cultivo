@@ -107,9 +107,14 @@ export class AuthService {
             }),
         ]);
 
+        const decodedAt = this.jwtService.decode(at) as any;
+        const decodedRt = this.jwtService.decode(rt) as any;
+
         return {
             access_token: at,
             refresh_token: rt,
+            expires_in: decodedAt?.exp && decodedAt?.iat ? decodedAt.exp - decodedAt.iat : 900, // deafult 15m
+            refresh_expires_in: decodedRt?.exp && decodedRt?.iat ? decodedRt.exp - decodedRt.iat : 604800, // default 7d
         };
     }
 
