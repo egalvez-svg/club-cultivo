@@ -1,3 +1,7 @@
+-- Drop existing types if they were partially created
+DROP TYPE IF EXISTS "AppointmentStatus" CASCADE;
+DROP TYPE IF EXISTS "ReportType" CASCADE;
+
 -- CreateEnum
 CREATE TYPE "AppointmentStatus" AS ENUM ('PENDING', 'COMPLETED', 'CANCELLED');
 
