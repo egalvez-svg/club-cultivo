@@ -52,10 +52,10 @@ export class UsersService {
                 passwordHash: hashedPassword,
                 organizationId: finalOrgId,
                 userRoles: {
-                    create: {
-                        roleId: createUserDto.roleId,
-                        isDefault: true,
-                    }
+                    create: createUserDto.roleIds.map((id, index) => ({
+                        roleId: id,
+                        isDefault: index === 0, // El primero será el default
+                    }))
                 }
             },
             include: { userRoles: { include: { role: true } } }
@@ -82,7 +82,7 @@ export class UsersService {
         }
 
         const data: any = { ...updateUserDto };
-        delete data.roleId;
+        delete data.roleIds;
         delete data.organizationId;
 
         if (updateUserDto.password) {
@@ -90,10 +90,32 @@ export class UsersService {
             delete data.password;
         }
 
-        const updatedUser = await this.prisma.user.update({
-            where: { id },
-            data,
-            include: { userRoles: { include: { role: true } } }
+        const updatedUser = await this.prisma.$transaction(async (tx) => {
+            await tx.user.update({
+                where: { id },
+                data,
+            });
+
+            if (updateUserDto.roleIds && updateUserDto.roleIds.length > 0) {
+                // Delete old roles
+                await tx.userRole.deleteMany({
+                    where: { userId: id }
+                });
+
+                // Insert new roles
+                await tx.userRole.createMany({
+                    data: updateUserDto.roleIds.map((roleId, index) => ({
+                        userId: id,
+                        roleId: roleId,
+                        isDefault: index === 0 // El primero será el default
+                    }))
+                });
+            }
+
+            return tx.user.findUniqueOrThrow({
+                where: { id },
+                include: { userRoles: { include: { role: true } } }
+            });
         });
 
         const { passwordHash, hashedRefreshToken, ...result } = updatedUser;
