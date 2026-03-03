@@ -7,14 +7,16 @@ import { JwtStrategy } from './jwt.strategy';
 import { MailModule } from '../mail/mail.module';
 import { PrismaModule } from '../prisma/prisma.module';
 
+import { UsersModule } from '../users/users.module';
+
 @Module({
   imports: [
-    PrismaModule,
+    UsersModule,
     PassportModule,
     MailModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'secretKey',
-      signOptions: { expiresIn: '1h' },
+      secret: process.env.JWT_ACCESS_SECRET || 'at-secret',
+      signOptions: { expiresIn: '15m' },
     }),
   ],
   controllers: [AuthController],

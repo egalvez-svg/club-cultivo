@@ -142,4 +142,30 @@ export class DispensationsService {
             }
         });
     }
+
+    async getGramsSum(organizationId: string, gte: Date, lte?: Date) {
+        const result = await this.prisma.dispensation.aggregate({
+            where: {
+                organizationId,
+                status: 'CONFIRMED',
+                confirmedAt: { gte, ...(lte && { lte }) }
+            },
+            _sum: { totalEquivalentGrams: true }
+        });
+        return result._sum.totalEquivalentGrams || 0;
+    }
+
+    async getRecent(organizationId: string, take: number) {
+        return this.prisma.dispensation.findMany({
+            where: { organizationId, status: 'CONFIRMED' },
+            take,
+            orderBy: { confirmedAt: 'desc' },
+            include: {
+                recipient: { select: { fullName: true } },
+                items: {
+                    include: { product: { select: { name: true } } }
+                }
+            }
+        });
+    }
 }

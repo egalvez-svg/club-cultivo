@@ -1,113 +1,52 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
 import { startOfMonth, subMonths, endOfMonth } from 'date-fns';
+import { UsersService } from '../users/users.service';
+import { DispensationsService } from '../dispensations/dispensations.service';
+import { LotsService } from '../lots/lots.service';
+import { PaymentsService } from '../payments/payments.service';
+import { AppointmentsService } from '../appointments/appointments.service';
 
 @Injectable()
 export class DashboardService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private usersService: UsersService,
+        private dispensationsService: DispensationsService,
+        private lotsService: LotsService,
+        private paymentsService: PaymentsService,
+        private appointmentsService: AppointmentsService
+    ) { }
 
     async getSummary(organizationId: string) {
         const now = new Date();
         const firstDayCurrentMonth = startOfMonth(now);
         const firstDayLastMonth = startOfMonth(subMonths(now, 1));
         const lastDayLastMonth = endOfMonth(subMonths(now, 1));
-        const todayStart = new Date(now.setHours(0, 0, 0, 0));
-        const todayEnd = new Date(now.setHours(23, 59, 59, 999));
+        const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
+        const todayEnd = new Date(new Date().setHours(23, 59, 59, 999));
 
         // 1. KPI: Active Patients
-        const totalActivePatients = await this.prisma.user.count({
-            where: {
-                organizationId,
-                status: 'ACTIVE',
-                userRoles: { some: { role: { name: 'PATIENT' } } }
-            }
-        });
-
-        const activePatientsLastMonth = await this.prisma.user.count({
-            where: {
-                organizationId,
-                status: 'ACTIVE',
-                userRoles: { some: { role: { name: 'PATIENT' } } },
-                createdAt: { lt: firstDayCurrentMonth }
-            }
-        });
+        const totalActivePatients = await this.usersService.countActivePatients(organizationId);
+        const activePatientsLastMonth = await this.usersService.countActivePatients(organizationId, firstDayCurrentMonth);
         const patientsGrowth = this.calculateGrowth(totalActivePatients, activePatientsLastMonth);
 
         // 2. KPI: Grams Dispensed (This Month)
-        const gramsCurrentMonth = await this.prisma.dispensation.aggregate({
-            where: {
-                organizationId,
-                status: 'CONFIRMED',
-                confirmedAt: { gte: firstDayCurrentMonth }
-            },
-            _sum: { totalEquivalentGrams: true }
-        });
-
-        const gramsLastMonth = await this.prisma.dispensation.aggregate({
-            where: {
-                organizationId,
-                status: 'CONFIRMED',
-                confirmedAt: { gte: firstDayLastMonth, lte: lastDayLastMonth }
-            },
-            _sum: { totalEquivalentGrams: true }
-        });
-        const gramsSum = gramsCurrentMonth._sum.totalEquivalentGrams || 0;
-        const gramsGrowth = this.calculateGrowth(gramsSum, gramsLastMonth._sum.totalEquivalentGrams || 0);
+        const gramsCurrentMonth = await this.dispensationsService.getGramsSum(organizationId, firstDayCurrentMonth);
+        const gramsLastMonth = await this.dispensationsService.getGramsSum(organizationId, firstDayLastMonth, lastDayLastMonth);
+        const gramsGrowth = this.calculateGrowth(gramsCurrentMonth, gramsLastMonth);
 
         // 3. KPI: Lots in Cultivation
-        const lotsCount = await this.prisma.productionLot.count({
-            where: {
-                organizationId,
-                lotType: 'CULTIVATION',
-                status: { notIn: ['DEPLETED', 'BLOCKED'] }
-            }
-        });
+        const lotsCount = await this.lotsService.countActiveCultivationLots(organizationId);
 
         // 4. KPI: Total Revenue (This Month)
-        const revenueCurrentMonth = await this.prisma.payment.aggregate({
-            where: {
-                organizationId,
-                status: 'PAID',
-                createdAt: { gte: firstDayCurrentMonth }
-            },
-            _sum: { amount: true }
-        });
-
-        const revenueLastMonth = await this.prisma.payment.aggregate({
-            where: {
-                organizationId,
-                status: 'PAID',
-                createdAt: { gte: firstDayLastMonth, lte: lastDayLastMonth }
-            },
-            _sum: { amount: true }
-        });
-        const revenueSum = revenueCurrentMonth._sum.amount || 0;
-        const revenueGrowth = this.calculateGrowth(revenueSum, revenueLastMonth._sum.amount || 0);
+        const revenueCurrentMonth = await this.paymentsService.getTotalRevenue(organizationId, firstDayCurrentMonth);
+        const revenueLastMonth = await this.paymentsService.getTotalRevenue(organizationId, firstDayLastMonth, lastDayLastMonth);
+        const revenueGrowth = this.calculateGrowth(revenueCurrentMonth, revenueLastMonth);
 
         // 5. Recent Dispensations
-        const recentDispensations = await this.prisma.dispensation.findMany({
-            where: { organizationId, status: 'CONFIRMED' },
-            take: 5,
-            orderBy: { confirmedAt: 'desc' },
-            include: {
-                recipient: { select: { fullName: true } },
-                items: {
-                    include: { product: { select: { name: true } } }
-                }
-            }
-        });
+        const recentDispensations = await this.dispensationsService.getRecent(organizationId, 5);
 
         // 6. Today's Appointments
-        const todayAppointments = await this.prisma.appointment.findMany({
-            where: {
-                organizationId,
-                date: { gte: todayStart, lte: todayEnd }
-            },
-            include: {
-                patient: { select: { fullName: true } }
-            },
-            orderBy: { date: 'asc' }
-        });
+        const todayAppointments = await this.appointmentsService.findToday(organizationId, todayStart, todayEnd);
 
         return {
             kpis: {
@@ -116,14 +55,14 @@ export class DashboardService {
                     growth: patientsGrowth,
                 },
                 gramsDispensed: {
-                    value: gramsSum,
+                    value: gramsCurrentMonth,
                     growth: gramsGrowth,
                 },
                 lotsInCultivation: {
                     value: lotsCount,
                 },
                 totalRevenue: {
-                    value: revenueSum,
+                    value: revenueCurrentMonth,
                     growth: revenueGrowth,
                 }
             },

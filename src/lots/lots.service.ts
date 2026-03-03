@@ -127,4 +127,14 @@ export class LotsService {
             }
         });
     }
+
+    async countActiveCultivationLots(organizationId: string) {
+        return this.prisma.productionLot.count({
+            where: {
+                organizationId,
+                lotType: 'CULTIVATION',
+                status: { notIn: ['DEPLETED', 'BLOCKED'] }
+            }
+        });
+    }
 }

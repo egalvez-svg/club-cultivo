@@ -78,4 +78,38 @@ export class ReprocanService {
             data: dataToUpdate,
         });
     }
+
+    async createRecord(data: any, tx?: any) {
+        const prisma = tx || this.prisma;
+        return prisma.reprocanRecord.create({
+            data
+        });
+    }
+
+    async upsertActiveRecord(patientId: string, data: any, tx?: any) {
+        const prisma = tx || this.prisma;
+        const activeRecord = await prisma.reprocanRecord.findFirst({
+            where: { patientId, status: 'ACTIVE' }
+        });
+
+        if (activeRecord) {
+            return prisma.reprocanRecord.update({
+                where: { id: activeRecord.id },
+                data: {
+                    reprocanNumber: data.reprocanNumber,
+                    expirationDate: data.expirationDate ? new Date(data.expirationDate) : activeRecord.expirationDate,
+                    status: data.status || activeRecord.status
+                }
+            });
+        }
+
+        return prisma.reprocanRecord.create({
+            data: {
+                patientId,
+                reprocanNumber: data.reprocanNumber,
+                expirationDate: data.expirationDate ? new Date(data.expirationDate) : null,
+                status: 'ACTIVE'
+            }
+        });
+    }
 }

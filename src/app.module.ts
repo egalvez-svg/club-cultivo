@@ -19,11 +19,12 @@ import { ReprocanModule } from './reprocan/reprocan.module';
 import { CashRegisterModule } from './cash-register/cash-register.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { PdfService } from './pdf/pdf.service';
+import { AppointmentsModule } from './appointments/appointments.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, PatientsModule, StrainsModule, ProductsModule, LotsModule, StockModule, DispensationsModule, PaymentsModule, ReportsModule, AuditModule, RolesModule, UsersModule, OrganizationsModule, ReprocanModule, CashRegisterModule, DashboardModule],
+  imports: [PrismaModule, AuthModule, PatientsModule, StrainsModule, ProductsModule, LotsModule, StockModule, DispensationsModule, PaymentsModule, ReportsModule, AuditModule, RolesModule, UsersModule, OrganizationsModule, ReprocanModule, CashRegisterModule, DashboardModule, AppointmentsModule],
   controllers: [AppController],
   providers: [AppService, PdfService],
-  exports: [PdfService] // Add this line so ReportsModule can resolve PdfService
+  exports: [PdfService]
 })
 export class AppModule { }

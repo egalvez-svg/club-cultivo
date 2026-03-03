@@ -81,4 +81,16 @@ export class PaymentsService {
             data
         });
     }
+
+    async getTotalRevenue(organizationId: string, gte: Date, lte?: Date) {
+        const result = await this.prisma.payment.aggregate({
+            where: {
+                organizationId,
+                status: 'PAID',
+                createdAt: { gte, ...(lte && { lte }) }
+            },
+            _sum: { amount: true }
+        });
+        return result._sum.amount || 0;
+    }
 }

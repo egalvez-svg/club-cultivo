@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from '../prisma/prisma.service';
+import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { User, Role, Organization, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
@@ -16,16 +16,13 @@ export type SafeUser = Omit<UserWithRelations, 'passwordHash' | 'hashedRefreshTo
 @Injectable()
 export class AuthService {
     constructor(
-        private prisma: PrismaService,
+        private usersService: UsersService,
         private jwtService: JwtService,
         private mailService: MailService,
     ) { }
 
     async validateUser(email: string, pass: string): Promise<SafeUser | null> {
-        const user = await this.prisma.user.findUnique({
-            where: { email },
-            include: { organization: true, userRoles: { include: { role: true } } },
-        });
+        const user = await this.usersService.findByEmailWithRelations(email);
 
         if (user && user.passwordHash && await bcrypt.compare(pass, user.passwordHash)) {
             const { passwordHash, hashedRefreshToken, ...result } = user;
@@ -63,10 +60,7 @@ export class AuthService {
     }
 
     async refreshTokens(id: string, refreshToken: string) {
-        const user = await this.prisma.user.findUnique({
-            where: { id },
-            include: { userRoles: { include: { role: true } }, organization: true }
-        });
+        const user = await this.usersService.findByIdWithRelations(id);
 
         if (!user || !user.hashedRefreshToken) {
             throw new UnauthorizedException('Acceso denegado');
@@ -91,10 +85,7 @@ export class AuthService {
 
     async updateRefreshToken(userId: string, refreshToken: string): Promise<void> {
         const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-        await this.prisma.user.update({
-            where: { id: userId },
-            data: { hashedRefreshToken },
-        });
+        await this.usersService.updateRefreshToken(userId, hashedRefreshToken);
     }
 
     async getTokens(userId: string, email: string, role: string, organizationId: string) {
@@ -123,7 +114,7 @@ export class AuthService {
     }
 
     async forgotPassword(email: string): Promise<{ message: string }> {
-        const user = await this.prisma.user.findUnique({ where: { email } });
+        const user = await this.usersService.findByEmailWithRelations(email);
         if (!user) {
             return { message: 'Si el correo existe, se ha enviado un enlace de recuperación' };
         }
@@ -132,13 +123,7 @@ export class AuthService {
         const expires = new Date();
         expires.setHours(expires.getHours() + 1);
 
-        await this.prisma.user.update({
-            where: { id: user.id },
-            data: {
-                resetPasswordToken: token,
-                resetPasswordExpires: expires,
-            },
-        });
+        await this.usersService.updatePasswordResetToken(user.id, token, expires);
 
         if (user.email) {
             await this.mailService.sendPasswordResetEmail(user.email, token);
@@ -148,12 +133,7 @@ export class AuthService {
     }
 
     async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
-        const user = await this.prisma.user.findFirst({
-            where: {
-                resetPasswordToken: token,
-                resetPasswordExpires: { gt: new Date() },
-            },
-        });
+        const user = await this.usersService.findByResetToken(token);
 
         if (!user) {
             throw new UnauthorizedException('Token inválido o expirado');
@@ -161,14 +141,7 @@ export class AuthService {
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        await this.prisma.user.update({
-            where: { id: user.id },
-            data: {
-                passwordHash: hashedPassword,
-                resetPasswordToken: null,
-                resetPasswordExpires: null,
-            },
-        });
+        await this.usersService.updatePassword(user.id, hashedPassword);
 
         return { message: 'Contraseña actualizada correctamente' };
     }

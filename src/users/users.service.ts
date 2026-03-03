@@ -142,4 +142,66 @@ export class UsersService {
             })),
         };
     }
+
+    async countActivePatients(organizationId: string, dateLimit?: Date) {
+        return this.prisma.user.count({
+            where: {
+                organizationId,
+                status: 'ACTIVE',
+                userRoles: { some: { role: { name: 'PATIENT' } } },
+                ...(dateLimit && { createdAt: { lt: dateLimit } })
+            }
+        });
+    }
+
+    async findByEmailWithRelations(email: string) {
+        return this.prisma.user.findUnique({
+            where: { email },
+            include: { organization: true, userRoles: { include: { role: true } } },
+        });
+    }
+
+    async findByIdWithRelations(id: string) {
+        return this.prisma.user.findUnique({
+            where: { id },
+            include: { organization: true, userRoles: { include: { role: true } } },
+        });
+    }
+
+    async findByResetToken(token: string) {
+        return this.prisma.user.findFirst({
+            where: {
+                resetPasswordToken: token,
+                resetPasswordExpires: { gt: new Date() },
+            },
+        });
+    }
+
+    async updateRefreshToken(id: string, hashedRefreshToken: string | null) {
+        return this.prisma.user.update({
+            where: { id },
+            data: { hashedRefreshToken },
+        });
+    }
+
+    async updatePasswordResetToken(id: string, token: string | null, expires: Date | null) {
+        return this.prisma.user.update({
+            where: { id },
+            data: {
+                resetPasswordToken: token,
+                resetPasswordExpires: expires,
+            },
+        });
+    }
+
+    async updatePassword(id: string, hashedPassword: string) {
+        return this.prisma.user.update({
+            where: { id },
+            data: {
+                passwordHash: hashedPassword,
+                resetPasswordToken: null,
+                resetPasswordExpires: null,
+            },
+        });
+    }
 }

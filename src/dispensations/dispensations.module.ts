@@ -16,6 +16,7 @@ import { PaymentsModule } from '../payments/payments.module';
     PaymentsModule
   ],
   providers: [DispensationsService],
-  controllers: [DispensationsController]
+  controllers: [DispensationsController],
+  exports: [DispensationsService]
 })
 export class DispensationsModule { }

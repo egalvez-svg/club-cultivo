@@ -16,4 +16,27 @@ export class RolesService {
             }
         });
     }
+
+    async findByName(name: string, organizationId?: string) {
+        return this.prisma.role.findFirst({
+            where: {
+                name,
+                OR: [
+                    { organizationId },
+                    { organizationId: null }
+                ]
+            }
+        });
+    }
+
+    async assignRole(userId: string, roleId: string, isDefault: boolean = false, tx?: any) {
+        const prisma = tx || this.prisma;
+        return prisma.userRole.upsert({
+            where: {
+                userId_roleId: { userId, roleId }
+            },
+            create: { userId, roleId, isDefault },
+            update: { isDefault }
+        });
+    }
 }

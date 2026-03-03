@@ -1,21 +1,26 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
+import { RolesService } from '../roles/roles.service';
+import { ReprocanService } from '../reprocan/reprocan.service';
+import { AuditService } from '../audit/audit.service';
 
 const DEFAULT_PASSWORD = 'bienvenidoalClub123!';
 
 @Injectable()
 export class PatientsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private rolesService: RolesService,
+        private reprocanService: ReprocanService,
+        private auditService: AuditService,
+    ) { }
 
     private async getPatientRoleId() {
-        const role = await this.prisma.role.findFirst({
-            where: { name: 'PATIENT' }
-        });
+        const role = await this.rolesService.findByName('PATIENT');
         if (!role) {
-            return (await this.prisma.role.create({
-                data: { name: 'PATIENT' }
-            })).id;
+            // This case should be rare if seed is run, but keep for safety
+            throw new NotFoundException('Rol PATIENT no encontrado');
         }
         return role.id;
     }
@@ -71,9 +76,8 @@ export class PatientsService {
 
             // Si existe pero NO tiene rol PATIENT (es operario), le agregamos el rol
             return this.prisma.$transaction(async (tx) => {
-                await tx.userRole.create({
-                    data: { userId: existing.id, roleId },
-                });
+                // 1. Asignar rol usando RolesService
+                await this.rolesService.assignRole(existing.id, roleId, false, tx);
 
                 const updatedUser = await tx.user.update({
                     where: { id: existing.id },
@@ -83,28 +87,25 @@ export class PatientsService {
                     include: { userRoles: { include: { role: true } } },
                 });
 
-                // Si manda reprocan en la peticion de operario a paciente, lo agregamos
+                // 2. Si manda reprocan, usar ReprocanService
                 if (data.reprocanNumber) {
-                    await tx.reprocanRecord.create({
-                        data: {
-                            patientId: existing.id,
-                            reprocanNumber: data.reprocanNumber,
-                            expirationDate: data.reprocanExpiration ? new Date(data.reprocanExpiration) : null,
-                            status: 'ACTIVE'
-                        }
-                    });
+                    await this.reprocanService.createRecord({
+                        patientId: existing.id,
+                        reprocanNumber: data.reprocanNumber,
+                        expirationDate: data.reprocanExpiration ? new Date(data.reprocanExpiration) : null,
+                        status: 'ACTIVE'
+                    }, tx);
                 }
 
-                await tx.auditEvent.create({
-                    data: {
-                        organizationId,
-                        entityType: 'Patient',
-                        entityId: existing.id,
-                        action: 'ADD_PATIENT_ROLE',
-                        newData: JSON.parse(JSON.stringify(updatedUser)),
-                        performedById: userId,
-                    },
-                });
+                // 3. Auditoría usando AuditService
+                await this.auditService.recordEvent({
+                    organizationId,
+                    entityType: 'Patient',
+                    entityId: existing.id,
+                    action: 'ADD_PATIENT_ROLE',
+                    newData: updatedUser,
+                    performedById: userId,
+                }, tx);
 
                 return updatedUser;
             });
@@ -138,16 +139,14 @@ export class PatientsService {
                 include: { userRoles: { include: { role: true } } },
             });
 
-            await tx.auditEvent.create({
-                data: {
-                    organizationId,
-                    entityType: 'Patient',
-                    entityId: patient.id,
-                    action: 'CREATE_PATIENT',
-                    newData: JSON.parse(JSON.stringify(patient)),
-                    performedById: userId,
-                },
-            });
+            await this.auditService.recordEvent({
+                organizationId,
+                entityType: 'Patient',
+                entityId: patient.id,
+                action: 'CREATE_PATIENT',
+                newData: patient,
+                performedById: userId,
+            }, tx);
 
             return patient;
         });
@@ -247,40 +246,23 @@ export class PatientsService {
                 include: { reprocanRecords: { where: { status: 'ACTIVE' }, take: 1 } }
             });
 
-            // Update reprocan if sent in update (retro-compatibility frontend ease)
+            // Update reprocan using ReprocanService
             if (data.reprocanNumber) {
-                const activeReprocan = updatedPatient.reprocanRecords?.[0];
-                if (activeReprocan) {
-                    await tx.reprocanRecord.update({
-                        where: { id: activeReprocan.id },
-                        data: {
-                            reprocanNumber: data.reprocanNumber,
-                            expirationDate: data.reprocanExpiration ? new Date(data.reprocanExpiration) : activeReprocan.expirationDate
-                        }
-                    });
-                } else {
-                    await tx.reprocanRecord.create({
-                        data: {
-                            patientId: id,
-                            reprocanNumber: data.reprocanNumber,
-                            expirationDate: data.reprocanExpiration ? new Date(data.reprocanExpiration) : null,
-                            status: 'ACTIVE'
-                        }
-                    });
-                }
+                await this.reprocanService.upsertActiveRecord(id, {
+                    reprocanNumber: data.reprocanNumber,
+                    expirationDate: data.reprocanExpiration,
+                }, tx);
             }
 
-            await tx.auditEvent.create({
-                data: {
-                    organizationId,
-                    entityType: 'Patient',
-                    entityId: updatedPatient.id,
-                    action: 'UPDATE_PATIENT',
-                    previousData: JSON.parse(JSON.stringify(oldPatient)),
-                    newData: JSON.parse(JSON.stringify(updatedPatient)),
-                    performedById: userId,
-                },
-            });
+            await this.auditService.recordEvent({
+                organizationId,
+                entityType: 'Patient',
+                entityId: updatedPatient.id,
+                action: 'UPDATE_PATIENT',
+                previousData: oldPatient,
+                newData: updatedPatient,
+                performedById: userId,
+            }, tx);
 
             return updatedPatient;
         });
@@ -295,17 +277,15 @@ export class PatientsService {
                 data: { status: 'SUSPENDED' },
             });
 
-            await tx.auditEvent.create({
-                data: {
-                    organizationId,
-                    entityType: 'Patient',
-                    entityId: patient.id,
-                    action: 'SUSPEND_PATIENT',
-                    previousData: JSON.parse(JSON.stringify(patient)),
-                    newData: JSON.parse(JSON.stringify(updatedPatient)),
-                    performedById: userId,
-                },
-            });
+            await this.auditService.recordEvent({
+                organizationId,
+                entityType: 'Patient',
+                entityId: patient.id,
+                action: 'SUSPEND_PATIENT',
+                previousData: patient,
+                newData: updatedPatient,
+                performedById: userId,
+            }, tx);
 
             return updatedPatient;
         });
