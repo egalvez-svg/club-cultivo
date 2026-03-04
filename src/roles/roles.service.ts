@@ -36,6 +36,7 @@ export class RolesService {
     async findAll(organizationId: string): Promise<Role[]> {
         return this.prisma.role.findMany({
             where: {
+                name: { not: 'SUPER_ADMIN' },
                 OR: [
                     { organizationId: organizationId },
                     { organizationId: null }
