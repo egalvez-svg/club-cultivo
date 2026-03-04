@@ -6,8 +6,47 @@ const prisma = new PrismaClient();
 async function main() {
     console.log('Starting seed...');
 
-    // 1. Get or Create Organization
-    let org = await prisma.organization.findFirst();
+    // 1. Get or Create System Organization
+    let sysOrg = await prisma.organization.findFirst({ where: { name: 'SYSTEM' } });
+    if (!sysOrg) {
+        sysOrg = await prisma.organization.create({
+            data: { name: 'SYSTEM', active: true },
+        });
+    }
+    console.log(`System Organization: ${sysOrg.id}`);
+
+    // 2. Global Roles
+    const superAdminRole = await prisma.role.upsert({
+        where: { organizationId_name: { organizationId: null as any, name: 'SUPER_ADMIN' } },
+        update: {},
+        create: { name: 'SUPER_ADMIN', organizationId: null },
+    });
+
+    // 3. Create SuperAdmin User
+    const superAdminEmail = 'superadmin@clubcultivo.com';
+    const hashedPassword = await require('bcryptjs').hash('superadmin123', 10);
+
+    await prisma.user.upsert({
+        where: { email: superAdminEmail },
+        update: {},
+        create: {
+            email: superAdminEmail,
+            passwordHash: hashedPassword,
+            fullName: 'Super Admin',
+            documentNumber: '00000000',
+            organizationId: sysOrg.id,
+            userRoles: {
+                create: {
+                    roleId: superAdminRole.id,
+                    isDefault: true,
+                },
+            },
+        },
+    });
+    console.log('SuperAdmin user created: superadmin@clubcultivo.com / superadmin123');
+
+    // 4. Demo Organization
+    let org = await prisma.organization.findFirst({ where: { NOT: { name: 'SYSTEM' } } });
     if (!org) {
         org = await prisma.organization.create({
             data: {
@@ -16,7 +55,7 @@ async function main() {
         });
     }
     const orgId = org.id;
-    console.log(`Using Organization: ${org.name} (${orgId})`);
+    console.log(`Using Demo Organization: ${org.name} (${orgId})`);
 
     // 2. Roles
     const roles = ['ADMIN', 'PATIENT', 'PRODUCTION_MANAGER', 'DISPENSARY_OPERATOR'];

@@ -2,11 +2,14 @@ import { Controller, Get, Post, Patch, Body, Param, UseGuards, Delete, HttpCode,
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto, UpdateOrganizationDto } from './dto/organization.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../roles/decorators/roles.decorator';
+import { RolesGuard } from '../roles/guards/roles.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 
 @ApiTags('Organizaciones')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('SUPER_ADMIN')
 @Controller('organizations')
 export class OrganizationsController {
     constructor(private readonly organizationsService: OrganizationsService) { }
