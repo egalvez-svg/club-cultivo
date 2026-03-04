@@ -16,9 +16,8 @@ export class UsersService {
                     some: { role: { NOT: { name: 'PATIENT' } } }
                 }
             },
-            include: { userRoles: { include: { role: true } } },
+            include: { userRoles: { include: { role: true } }, organization: true },
         });
-
         return users.map(user => {
             const { passwordHash, hashedRefreshToken, ...rest } = user;
             return {
@@ -37,34 +36,69 @@ export class UsersService {
             where: { email: createUserDto.email },
         });
 
-        if (existingUser) {
-            throw new ConflictException('El correo electrónico ya existe');
-        }
-
         const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
         const finalOrgId = createUserDto.organizationId || organizationId;
 
-        const user = await this.prisma.user.create({
-            data: {
-                fullName: createUserDto.fullName,
-                documentNumber: createUserDto.documentNumber,
-                email: createUserDto.email,
-                passwordHash: hashedPassword,
-                organizationId: finalOrgId,
-                userRoles: {
-                    create: createUserDto.roleIds.map((id, index) => ({
-                        roleId: id,
-                        isDefault: index === 0, // El primero será el default
-                    }))
-                }
-            },
-            include: { userRoles: { include: { role: true } } }
-        });
+        let user;
+
+        if (existingUser) {
+            if (existingUser.active) {
+                throw new ConflictException('El correo electrónico ya existe');
+            }
+
+            // El usuario existe pero está inactivo (eliminación lógica).
+            // Procedemos a "reactivarlo" y sobreescribir sus datos y roles.
+            user = await this.prisma.$transaction(async (tx) => {
+                // Borramos los roles viejos de este usuario inactivo
+                await tx.userRole.deleteMany({
+                    where: { userId: existingUser.id },
+                });
+
+                // Actualizamos los datos principales y limpiamos los tokens de sesión si hubieran
+                return tx.user.update({
+                    where: { id: existingUser.id },
+                    data: {
+                        fullName: createUserDto.fullName,
+                        documentNumber: createUserDto.documentNumber,
+                        passwordHash: hashedPassword,
+                        organizationId: finalOrgId,
+                        active: true,
+                        resetPasswordToken: null,
+                        resetPasswordExpires: null,
+                        hashedRefreshToken: null,
+                        userRoles: {
+                            create: createUserDto.roleIds.map((id, index) => ({
+                                roleId: id,
+                                isDefault: index === 0,
+                            })),
+                        },
+                    },
+                    include: { userRoles: { include: { role: true } } },
+                });
+            });
+        } else {
+            user = await this.prisma.user.create({
+                data: {
+                    fullName: createUserDto.fullName,
+                    documentNumber: createUserDto.documentNumber,
+                    email: createUserDto.email,
+                    passwordHash: hashedPassword,
+                    organizationId: finalOrgId,
+                    userRoles: {
+                        create: createUserDto.roleIds.map((id, index) => ({
+                            roleId: id,
+                            isDefault: index === 0, // El primero será el default
+                        })),
+                    },
+                },
+                include: { userRoles: { include: { role: true } } },
+            });
+        }
 
         const { passwordHash, hashedRefreshToken, ...result } = user;
         return {
             ...result,
-            roles: user.userRoles.map(ur => ({
+            roles: user.userRoles.map((ur) => ({
                 id: ur.role.id,
                 name: ur.role.name,
                 isDefault: ur.isDefault,

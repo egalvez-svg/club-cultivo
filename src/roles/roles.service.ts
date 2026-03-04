@@ -113,13 +113,15 @@ export class RolesService {
     async remove(organizationId: string, id: string): Promise<{ message: string }> {
         const role = await this.findOne(organizationId, id);
 
-        if (role.organizationId === null) {
-            throw new ConflictException('No se pueden eliminar roles del sistema');
-        }
+        // if (role.organizationId === null) {
+        //     throw new ConflictException('No se pueden eliminar roles del sistema');
+        // }
 
         const count = await this.prisma.userRole.count({
             where: { roleId: id }
         });
+
+
 
         if (count > 0) {
             throw new ConflictException('No se puede eliminar el rol porque hay usuarios asignados a él');

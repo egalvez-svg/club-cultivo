@@ -115,7 +115,7 @@ model Product {
   presentationType    ProductPresentationType
   physicalUnitType    PhysicalUnitType
   dispensationItems   DispensationItem[]
-  lots                ProductionLot[]
+  lots                ProductionLot[]         @relation("ProductToLots")
   organization        Organization            @relation(fields: [organizationId], references: [id])
   strain              Strain                  @relation(fields: [strainId], references: [id])
 
@@ -131,9 +131,9 @@ model ProductionLot {
   lotCode                    String
   status                     LotStatus          @default(CREATED)
   totalOutputEquivalentGrams Float              @default(0)
+  availableEquivalentGrams   Float              @default(0)
   totalProductionCost        Float              @default(0)
   costPerEquivalentGram      Float              @default(0)
-  productId                  String?
   createdAt                  DateTime           @default(now())
   releasedAt                 DateTime?
   dispensationItems          DispensationItem[]
@@ -141,7 +141,7 @@ model ProductionLot {
   organization               Organization       @relation(fields: [organizationId], references: [id])
   parentLot                  ProductionLot?     @relation("LotHierarchy", fields: [parentLotId], references: [id])
   childLots                  ProductionLot[]    @relation("LotHierarchy")
-  product                    Product?           @relation(fields: [productId], references: [id])
+  products                   Product[]          @relation("ProductToLots")
   strain                     Strain             @relation(fields: [strainId], references: [id])
   stockMovements             StockMovement[]
 

@@ -15,9 +15,9 @@ async function main() {
     for (const product of products) {
         if (product.lots.length === 0) {
             console.log(`Product ${product.name} has no lots. Creating default lot...`);
-            
+
             const totalGrams = product.currentStock * product.equivalentDryGrams;
-            
+
             await prisma.productionLot.create({
                 data: {
                     organizationId: product.organizationId,
@@ -26,7 +26,10 @@ async function main() {
                     lotCode: `DEFAULT-${product.name.replace(/\s+/g, '-').substring(0, 5).toUpperCase()}-${Math.floor(Math.random() * 1000)}`,
                     status: 'RELEASED',
                     totalOutputEquivalentGrams: totalGrams,
-                    productId: product.id,
+                    availableEquivalentGrams: totalGrams,
+                    products: {
+                        connect: { id: product.id }
+                    }
                 }
             });
             createdCount++;

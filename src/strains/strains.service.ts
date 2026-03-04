@@ -59,6 +59,26 @@ export class StrainsService {
         });
     }
 
+    async findAllReleased(organizationId: string) {
+        return this.prisma.strain.findMany({
+            where: {
+                organizationId,
+                active: true,
+                lots: {
+                    some: {
+                        status: 'RELEASED'
+                    }
+                }
+            },
+            include: {
+                _count: {
+                    select: { lots: true }
+                }
+            },
+            orderBy: { name: 'asc' }
+        });
+    }
+
     async remove(organizationId: string, id: string) {
         await this.findOne(organizationId, id); // Verify it exists and belongs to org
 

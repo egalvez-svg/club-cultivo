@@ -18,6 +18,7 @@ export class LotsService {
                 lotCode,
                 parentLotId: createDto.parentLotId,
                 totalOutputEquivalentGrams: createDto.totalOutputEquivalentGrams || 0,
+                availableEquivalentGrams: createDto.totalOutputEquivalentGrams || 0,
                 totalProductionCost: createDto.totalProductionCost || 0,
                 status: createDto.status || 'CREATED',
             },
@@ -64,7 +65,8 @@ export class LotsService {
             select: {
                 id: true,
                 lotCode: true,
-                totalOutputEquivalentGrams: true
+                totalOutputEquivalentGrams: true,
+                availableEquivalentGrams: true
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -75,7 +77,10 @@ export class LotsService {
 
         if (updateDto.status === 'RELEASED') {
             const updateData: any = { status: updateDto.status, releasedAt: new Date() };
-            if (updateDto.totalOutputEquivalentGrams !== undefined) updateData.totalOutputEquivalentGrams = updateDto.totalOutputEquivalentGrams;
+            if (updateDto.totalOutputEquivalentGrams !== undefined) {
+                updateData.totalOutputEquivalentGrams = updateDto.totalOutputEquivalentGrams;
+                updateData.availableEquivalentGrams = updateDto.totalOutputEquivalentGrams;
+            }
             if (updateDto.totalProductionCost !== undefined) updateData.totalProductionCost = updateDto.totalProductionCost;
 
             return this.prisma.productionLot.update({
@@ -118,11 +123,11 @@ export class LotsService {
 
         if (!lot) return null;
 
-        const newBalance = lot.totalOutputEquivalentGrams - gramsToDeduct;
+        const newBalance = lot.availableEquivalentGrams - gramsToDeduct;
         return tx.productionLot.update({
             where: { id },
             data: {
-                totalOutputEquivalentGrams: newBalance,
+                availableEquivalentGrams: newBalance,
                 status: newBalance <= 0 ? 'DEPLETED' : lot.status,
             }
         });

@@ -110,7 +110,7 @@ export class ReportsService {
             },
             include: {
                 strain: true,
-                product: true,
+                products: true,
                 costs: true,
                 stockMovements: true
             },
@@ -128,10 +128,9 @@ export class ReportsService {
                 }
 
                 lots.forEach(lot => {
-                    doc.fontSize(14).text(`Lote: ${lot.lotCode} - Estado: ${lot.status}`);
                     doc.fontSize(12).text(`  - Variedad: ${lot.strain.name} (${lot.strain.type})`);
                     doc.text(`  - Tipo: ${lot.lotType}`);
-                    doc.text(`  - Producto Final: ${lot.product ? lot.product.name : 'N/A'}`);
+                    doc.text(`  - Productos: ${lot.products.length > 0 ? lot.products.map(p => p.name).join(', ') : 'N/A'}`);
                     doc.text(`  - Cosecha (Gramos Eq.): ${lot.totalOutputEquivalentGrams} gr`);
                     doc.text(`  - Costo Total: $${lot.totalProductionCost}`);
 
@@ -166,7 +165,7 @@ export class ReportsService {
             strain: lot.strain.name,
             outputGrams: lot.totalOutputEquivalentGrams,
             cost: lot.totalProductionCost,
-            product: lot.product?.name,
+            product: lot.products.map(p => p.name).join(', '),
             movementsCount: lot.stockMovements.length
         }));
     }
@@ -177,7 +176,7 @@ export class ReportsService {
         const startDate = new Date(numYear, numMonth - 1, 1);
         const endDate = new Date(numYear, numMonth, 0, 23, 59, 59);
 
-        const [payments, expenses, sessions] = await Promise.all([
+        const [payments, expenses, sessions, cashMovements] = await Promise.all([
             this.prisma.payment.findMany({
                 where: { organizationId, createdAt: { gte: startDate, lte: endDate }, status: 'PAID' },
                 include: { user: true }
@@ -188,11 +187,19 @@ export class ReportsService {
             this.prisma.cashRegisterSession.findMany({
                 where: { organizationId, openedAt: { gte: startDate, lte: endDate } },
                 include: { openedBy: true, closedBy: true }
+            }),
+            this.prisma.cashMovement.findMany({
+                where: { organizationId, createdAt: { gte: startDate, lte: endDate } },
+                include: { createdBy: true }
             })
         ]);
 
-        const totalIncome = payments.reduce((sum, p) => sum + p.amount, 0);
-        const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
+        const totalIncome = payments.reduce((sum, p) => sum + p.amount, 0) +
+            cashMovements.filter(m => m.movementType === 'INCOME' && !m.referenceId).reduce((sum, m) => sum + m.amount, 0);
+
+        const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0) +
+            cashMovements.filter(m => m.movementType === 'EXPENSE' && !m.referenceId).reduce((sum, m) => sum + m.amount, 0);
+
         const netBalance = totalIncome - totalExpense;
 
         if (format === 'pdf') {
@@ -208,16 +215,22 @@ export class ReportsService {
                 doc.moveDown();
 
                 // Ingresos
-                doc.fontSize(14).text('Total Ingresos (Últimos 10 pagos)');
-                payments.slice(0, 10).forEach(p => {
+                doc.fontSize(14).text('Ingresos Registrados (Pagos y Manuales)');
+                payments.forEach(p => {
                     doc.fontSize(10).text(`  - $${p.amount} | Método: ${p.paymentMethod} | Paciente: ${p.user.fullName} | Fecha: ${p.createdAt.toLocaleDateString()}`);
+                });
+                cashMovements.filter(m => m.movementType === 'INCOME' && !m.referenceId).forEach(m => {
+                    doc.fontSize(10).text(`  - $${m.amount} | Ingreso Manual | Nota: ${m.notes || 'S/N'} | Fecha: ${m.createdAt.toLocaleDateString()}`);
                 });
                 doc.moveDown();
 
                 // Egresos
-                doc.fontSize(14).text('Egresos Registrados');
+                doc.fontSize(14).text('Egresos Registrados (Gastos y Retiros)');
                 expenses.forEach(e => {
-                    doc.fontSize(10).text(`  - $${e.amount} | Cat: ${e.category} | Desc: ${e.description || 'N/A'} | Fecha: ${e.createdAt.toLocaleDateString()}`);
+                    doc.fontSize(10).text(`  - $${e.amount} | Gasto: ${e.category} | Desc: ${e.description || 'N/A'} | Fecha: ${e.createdAt.toLocaleDateString()}`);
+                });
+                cashMovements.filter(m => m.movementType === 'EXPENSE' && !m.referenceId).forEach(m => {
+                    doc.fontSize(10).text(`  - $${m.amount} | Retiro Manual | Nota: ${m.notes || 'S/N'} | Fecha: ${m.createdAt.toLocaleDateString()}`);
                 });
                 doc.moveDown();
 
@@ -245,8 +258,9 @@ export class ReportsService {
 
         return {
             summary: { totalIncome, totalExpense, netBalance },
-            recentPayments: payments.slice(0, 20),
+            recentPayments: payments,
             expenses,
+            manualMovements: cashMovements.filter(m => !m.referenceId),
             sessions
         };
     }
@@ -292,7 +306,7 @@ export class ReportsService {
         return this.prisma.productionLot.findMany({
             where: { organizationId },
             include: {
-                product: true,
+                products: true,
                 stockMovements: { include: { createdBy: true } },
                 costs: true,
             },
@@ -304,14 +318,14 @@ export class ReportsService {
         // Lógica para proyectar stock basada en dispensaciones vs producción
         const lots = await this.prisma.productionLot.findMany({
             where: { organizationId, status: 'RELEASED' },
-            include: { stockMovements: true, product: true },
+            include: { stockMovements: true, products: true },
         });
 
         return lots.map(lot => {
             const currentStock = lot.stockMovements.reduce((acc, mov) => acc + mov.quantityEquivalentGrams, 0);
             return {
                 lotCode: lot.lotCode,
-                productName: lot.product?.name,
+                productName: lot.products.map(p => p.name).join(', '),
                 currentStock,
                 status: lot.status,
             };

@@ -17,7 +17,9 @@ export class PatientsService {
     ) { }
 
     private async getPatientRoleId() {
-        const role = await this.rolesService.findByName('PATIENT');
+        const role = await this.prisma.role.findFirst({
+            where: { name: 'PATIENT' },
+        });
         if (!role) {
             // This case should be rare if seed is run, but keep for safety
             throw new NotFoundException('Rol PATIENT no encontrado');

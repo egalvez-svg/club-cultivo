@@ -2,7 +2,8 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request }
 import { StrainsService } from './strains.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { CreateStrainDto, UpdateStrainDto } from './dto/strain.dto';
+import { CreateStrainDto } from './dto/create-strain.dto';
+import { UpdateStrainDto } from './dto/update-strain.dto';
 
 @ApiTags('Strains / Cepas')
 @ApiBearerAuth()
@@ -23,6 +24,13 @@ export class StrainsController {
     @ApiResponse({ status: 200, description: 'Catálogo retornado' })
     findAll(@Request() req) {
         return this.strainsService.findAll(req.user.organizationId);
+    }
+
+    @Get('released')
+    @ApiOperation({ summary: 'Obtener catálogo de cepas activas con lotes liberados' })
+    @ApiResponse({ status: 200, description: 'Catálogo de cepas liberadas retornado' })
+    findAllReleased(@Request() req) {
+        return this.strainsService.findAllReleased(req.user.organizationId);
     }
 
     @Get(':id')

@@ -38,7 +38,7 @@ export class StockService {
             where: {
                 productionLot: { organizationId }
             },
-            include: { productionLot: { include: { product: true } }, createdBy: true },
+            include: { productionLot: { include: { products: true } }, createdBy: true },
             orderBy: { createdAt: 'desc' },
         });
     }
