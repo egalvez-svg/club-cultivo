@@ -5,10 +5,12 @@ import { DispensationsService } from '../dispensations/dispensations.service';
 import { LotsService } from '../lots/lots.service';
 import { PaymentsService } from '../payments/payments.service';
 import { AppointmentsService } from '../appointments/appointments.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class DashboardService {
     constructor(
+        private prisma: PrismaService,
         private usersService: UsersService,
         private dispensationsService: DispensationsService,
         private lotsService: LotsService,
@@ -83,6 +85,108 @@ export class DashboardService {
                 reason: a.reason,
             })),
         };
+    }
+
+    async getSuperAdminSummary() {
+        const now = new Date();
+        const firstDayCurrentMonth = startOfMonth(now);
+
+        // 1. Total Organizations (Active and not SYSTEM)
+        const totalOrgs = await this.prisma.organization.count({
+            where: { active: true, NOT: { name: 'SYSTEM' } }
+        });
+        const orgsLastMonth = await this.prisma.organization.count({
+            where: { active: true, NOT: { name: 'SYSTEM' }, createdAt: { lt: firstDayCurrentMonth } }
+        });
+        const orgsGrowth = this.calculateGrowth(totalOrgs, orgsLastMonth);
+
+        // 2. Total Users (Active)
+        const totalUsers = await this.prisma.user.count({
+            where: { active: true, organization: { NOT: { name: 'SYSTEM' } } }
+        });
+        const usersLastMonth = await this.prisma.user.count({
+            where: { active: true, organization: { NOT: { name: 'SYSTEM' } }, createdAt: { lt: firstDayCurrentMonth } }
+        });
+        const usersGrowth = this.calculateGrowth(totalUsers, usersLastMonth);
+
+        // 3. Active Strains
+        const activeStrains = await this.prisma.strain.count({
+            where: { active: true }
+        });
+
+        return {
+            kpis: {
+                organizations: {
+                    value: totalOrgs,
+                    growth: orgsGrowth
+                },
+                totalUsers: {
+                    value: totalUsers,
+                    growth: usersGrowth
+                },
+                activeStrains: {
+                    value: activeStrains
+                },
+                systemStatus: {
+                    value: 99.9 // Placeholder as in UI
+                }
+            }
+        };
+    }
+
+    async getOrganizationsDetailList() {
+        const organizations = await this.prisma.organization.findMany({
+            where: { active: true, NOT: { name: 'SYSTEM' } },
+            include: {
+                _count: {
+                    select: {
+                        users: true,
+                        lots: true
+                    }
+                }
+            }
+        });
+
+        // We need separate counts for Staff vs Patients
+        // To avoid N+1 queries in a simple way, we can use group by or raw SQL, 
+        // but for now let's just use prisma counts with a more detailed include if possible.
+        // Prisma doesn't support nested conditional counts easily in findMany _count.
+
+        const results = await Promise.all(organizations.map(async (org) => {
+            const patientCount = await this.prisma.user.count({
+                where: {
+                    organizationId: org.id,
+                    active: true,
+                    userRoles: { some: { role: { name: 'PATIENT' } } }
+                }
+            });
+
+            const staffCount = await this.prisma.user.count({
+                where: {
+                    organizationId: org.id,
+                    active: true,
+                    userRoles: { some: { role: { name: { not: 'PATIENT' } } } }
+                }
+            });
+
+            const activeLots = await this.prisma.productionLot.count({
+                where: {
+                    organizationId: org.id,
+                    status: { notIn: ['DEPLETED', 'BLOCKED'] }
+                }
+            });
+
+            return {
+                id: org.id,
+                name: org.name,
+                plan: "Pro", // Placeholder for UI
+                staffCount,
+                patientCount,
+                lotCount: activeLots,
+            };
+        }));
+
+        return results;
     }
 
     private calculateGrowth(current: number, previous: number): number {
