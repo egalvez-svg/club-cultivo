@@ -43,30 +43,32 @@ export class ReportsService {
         });
 
         if (format === 'pdf') {
+            const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+
             const buffer = await this.pdfService.generatePdfBuffer((doc) => {
-                doc.fontSize(20).text(`Trazabilidad de Pacientes - ${month}/${year}`, { align: 'center' });
+                doc.fontSize(12).fillColor('#333333').text(`Reporte de Entregas por Paciente`, { align: 'center' });
                 doc.moveDown();
 
-                if (dispensations.length === 0) {
-                    doc.fontSize(12).text('No hay dispensaciones en este período.');
-                    return;
-                }
+                const tableHeaders = ['Fecha', 'Paciente', 'DNI', 'Producto', 'Lote', 'Gramos'];
+                const tableRows: any[][] = [];
 
                 dispensations.forEach(d => {
-                    const recipient = d.recipient;
-                    const reprocan = recipient.reprocanRecords[0]?.reprocanNumber || 'Sin REPROCANN';
-
-                    doc.fontSize(14).text(`Paciente: ${recipient.fullName} - DNI: ${recipient.documentNumber}`);
-                    doc.fontSize(12).text(`REPROCANN: ${reprocan}`);
-                    doc.text(`Fecha Entrega: ${d.confirmedAt ? d.confirmedAt.toLocaleDateString() : 'Desconocida'}`);
-
                     d.items.forEach(item => {
-                        doc.text(`  - Producto: ${item.product.name} (${item.product.strain.name})`);
-                        doc.text(`    Lote: ${item.productionLot.lotCode}`);
-                        doc.text(`    Cantidad Equivalente: ${item.equivalentDryGrams} gr`);
+                        tableRows.push([
+                            d.confirmedAt ? d.confirmedAt.toLocaleDateString() : '-',
+                            d.recipient.fullName,
+                            d.recipient.documentNumber,
+                            item.product.name,
+                            item.productionLot.lotCode,
+                            `${item.equivalentDryGrams} gr`
+                        ]);
                     });
-                    doc.moveDown();
                 });
+
+                this.pdfService.drawTable(doc, tableHeaders, tableRows, [60, 110, 75, 100, 80, 70]);
+            }, {
+                title: `Trazabilidad de Pacientes - ${month}/${year}`,
+                organizationName: org?.name || 'Club Cultivo'
             });
 
             // Registrar en base de datos
@@ -118,31 +120,26 @@ export class ReportsService {
         });
 
         if (format === 'pdf') {
+            const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+
             const buffer = await this.pdfService.generatePdfBuffer((doc) => {
-                doc.fontSize(20).text(`Libro de Cultivo (Lotes) - ${month}/${year}`, { align: 'center' });
+                doc.fontSize(12).fillColor('#333333').text(`Seguimiento de Lotes y Cosechas`, { align: 'center' });
                 doc.moveDown();
 
-                if (lots.length === 0) {
-                    doc.fontSize(12).text('No hay lotes registrados en este período.');
-                    return;
-                }
+                const tableHeaders = ['Lote', 'Variedad', 'Tipo', 'Estado', 'Cosecha', 'Costo'];
+                const tableRows = lots.map(lot => [
+                    lot.lotCode,
+                    lot.strain.name,
+                    lot.lotType,
+                    lot.status,
+                    `${lot.totalOutputEquivalentGrams} gr`,
+                    `$${lot.totalProductionCost}`
+                ]);
 
-                lots.forEach(lot => {
-                    doc.fontSize(12).text(`  - Variedad: ${lot.strain.name} (${lot.strain.type})`);
-                    doc.text(`  - Tipo: ${lot.lotType}`);
-                    doc.text(`  - Productos: ${lot.products.length > 0 ? lot.products.map(p => p.name).join(', ') : 'N/A'}`);
-                    doc.text(`  - Cosecha (Gramos Eq.): ${lot.totalOutputEquivalentGrams} gr`);
-                    doc.text(`  - Costo Total: $${lot.totalProductionCost}`);
-
-                    if (lot.stockMovements.length > 0) {
-                        doc.text('  - Movimientos Registrados:');
-                        lot.stockMovements.forEach(m => {
-                            doc.fontSize(10).text(`      * ${m.movementType}: ${m.quantityEquivalentGrams} gr - Ref: ${m.referenceType || 'N/A'}`);
-                        });
-                        doc.fontSize(12);
-                    }
-                    doc.moveDown();
-                });
+                this.pdfService.drawTable(doc, tableHeaders, tableRows, [90, 100, 80, 75, 80, 70]);
+            }, {
+                title: `Libro de Cultivo - ${month}/${year}`,
+                organizationName: org?.name || 'Club Cultivo'
             });
 
             await this.prisma.generatedReport.create({
@@ -203,44 +200,47 @@ export class ReportsService {
         const netBalance = totalIncome - totalExpense;
 
         if (format === 'pdf') {
-            const buffer = await this.pdfService.generatePdfBuffer((doc) => {
-                doc.fontSize(20).text(`Auditoría Financiera - ${month}/${year}`, { align: 'center' });
-                doc.moveDown();
+            const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
 
+            const buffer = await this.pdfService.generatePdfBuffer((doc) => {
                 // Resumen
-                doc.fontSize(16).text('Resumen General');
-                doc.fontSize(12).text(`  Total Ingresos: $${totalIncome.toFixed(2)}`);
-                doc.text(`  Total Egresos: $${totalExpense.toFixed(2)}`);
-                doc.text(`  Balance Neto: $${netBalance.toFixed(2)}`);
+                const summaryY = doc.y;
+                doc.fillColor('#f5f5f5').rect(50, summaryY, 495, 60).fill();
+                doc.fillColor('#333333').fontSize(14).text('RESUMEN DE PERIODO', 60, summaryY + 10);
+
+                doc.fontSize(10);
+                doc.text(`Ingresos Totales: $${(totalIncome || 0).toFixed(2)}`, 60, summaryY + 35);
+                doc.text(`Egresos Totales: $${(totalExpense || 0).toFixed(2)}`, 200, summaryY + 35);
+                doc.text(`Balance Neto: $${(netBalance || 0).toFixed(2)}`, 340, summaryY + 35);
+
+                doc.y = summaryY + 80; // Bajamos el cursor después del cuadro
+                doc.x = 50;            // Reset alignment to left margin
                 doc.moveDown();
 
                 // Ingresos
-                doc.fontSize(14).text('Ingresos Registrados (Pagos y Manuales)');
-                payments.forEach(p => {
-                    doc.fontSize(10).text(`  - $${p.amount} | Método: ${p.paymentMethod} | Paciente: ${p.user.fullName} | Fecha: ${p.createdAt.toLocaleDateString()}`);
-                });
-                cashMovements.filter(m => m.movementType === 'INCOME' && !m.referenceId).forEach(m => {
-                    doc.fontSize(10).text(`  - $${m.amount} | Ingreso Manual | Nota: ${m.notes || 'S/N'} | Fecha: ${m.createdAt.toLocaleDateString()}`);
-                });
-                doc.moveDown();
+                doc.fontSize(13).fillColor('#1b5e20').text('DETALLE DE INGRESOS');
+                doc.moveDown(0.5);
+                const incHeaders = ['Fecha', 'Concepto', 'Referencia', 'Monto'];
+                const incRows = [
+                    ...payments.map(p => [p.createdAt.toLocaleDateString(), 'Pago Dispensación', p.user.fullName, `$${p.amount.toFixed(2)}`]),
+                    ...cashMovements.filter(m => m.movementType === 'INCOME' && !m.referenceId).map(m => [m.createdAt.toLocaleDateString(), 'Ingreso Manual', m.notes || 'S/N', `$${m.amount.toFixed(2)}`])
+                ];
+                this.pdfService.drawTable(doc, incHeaders, incRows, [80, 140, 175, 100]);
 
                 // Egresos
-                doc.fontSize(14).text('Egresos Registrados (Gastos y Retiros)');
-                expenses.forEach(e => {
-                    doc.fontSize(10).text(`  - $${e.amount} | Gasto: ${e.category} | Desc: ${e.description || 'N/A'} | Fecha: ${e.createdAt.toLocaleDateString()}`);
-                });
-                cashMovements.filter(m => m.movementType === 'EXPENSE' && !m.referenceId).forEach(m => {
-                    doc.fontSize(10).text(`  - $${m.amount} | Retiro Manual | Nota: ${m.notes || 'S/N'} | Fecha: ${m.createdAt.toLocaleDateString()}`);
-                });
+                doc.x = 50; // Ensure margin
                 doc.moveDown();
-
-                // Sesiones de caja
-                doc.fontSize(14).text('Sesiones de Caja');
-                sessions.forEach(s => {
-                    const status = s.status === 'CLOSED' ? `Cerrada ($${s.closingBalance})` : 'Abierta';
-                    doc.fontSize(10).text(`  - Apertura: ${s.openedAt.toLocaleString()} ($${s.openingBalance}) por ${s.openedBy.fullName}`);
-                    doc.text(`    Estado: ${status}`);
-                });
+                doc.fontSize(13).fillColor('#c62828').text('DETALLE DE EGRESOS');
+                doc.moveDown(0.5);
+                const expHeaders = ['Fecha', 'Concepto', 'Descripción', 'Monto'];
+                const expRows = [
+                    ...expenses.map(e => [e.createdAt.toLocaleDateString(), e.category, e.description || '-', `$${e.amount.toFixed(2)}`]),
+                    ...cashMovements.filter(m => m.movementType === 'EXPENSE' && !m.referenceId).map(m => [m.createdAt.toLocaleDateString(), 'Manual / Retiro', m.notes || 'S/N', `$${m.amount.toFixed(2)}`])
+                ];
+                this.pdfService.drawTable(doc, expHeaders, expRows, [80, 120, 195, 100]);
+            }, {
+                title: `Auditoría Financiera - ${month}/${year}`,
+                organizationName: org?.name || 'Club Cultivo'
             });
 
             await this.prisma.generatedReport.create({
