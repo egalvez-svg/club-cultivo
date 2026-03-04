@@ -22,7 +22,7 @@ export class RolesController {
     @ApiResponse({ status: 409, description: 'El nombre del rol ya existe' })
     create(@Request() req, @Body() createRoleDto: CreateRoleDto) {
         const targetOrgId = createRoleDto.organizationId || req.user.organizationId;
-        return this.rolesService.create(targetOrgId, createRoleDto);
+        return this.rolesService.create(targetOrgId, createRoleDto, req.user.id);
     }
 
     @Get()
@@ -50,7 +50,7 @@ export class RolesController {
     @ApiResponse({ status: 409, description: 'Conflicto (ej. rol del sistema, nombre duplicado)' })
     update(@Request() req, @Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto) {
         const targetOrgId = updateRoleDto.organizationId || req.user.organizationId;
-        return this.rolesService.update(targetOrgId, id, updateRoleDto);
+        return this.rolesService.update(targetOrgId, id, updateRoleDto, req.user.id);
     }
 
     @Delete(':id')

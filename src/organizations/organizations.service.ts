@@ -2,10 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrganizationDto, UpdateOrganizationDto } from './dto/organization.dto';
 import { Organization } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class OrganizationsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private auditService: AuditService
+    ) { }
 
     async findAll(): Promise<Organization[]> {
         return this.prisma.organization.findMany({
@@ -22,20 +26,44 @@ export class OrganizationsService {
         });
     }
 
-    async create(createOrganizationDto: CreateOrganizationDto): Promise<Organization> {
-        return this.prisma.organization.create({
+    async create(createOrganizationDto: CreateOrganizationDto, performedById: string): Promise<Organization> {
+        const org = await this.prisma.organization.create({
             data: {
                 name: createOrganizationDto.name,
                 active: createOrganizationDto.active ?? true,
             },
         });
+
+        await this.auditService.recordEvent({
+            organizationId: org.id,
+            entityType: 'ORGANIZATION',
+            entityId: org.id,
+            action: 'ORGANIZATION_CREATED',
+            newData: org,
+            performedById
+        });
+
+        return org;
     }
 
-    async update(id: string, updateOrganizationDto: UpdateOrganizationDto): Promise<Organization> {
-        return this.prisma.organization.update({
+    async update(id: string, updateOrganizationDto: UpdateOrganizationDto, performedById: string): Promise<Organization> {
+        const previousData = await this.findOne(id);
+        const org = await this.prisma.organization.update({
             where: { id },
             data: updateOrganizationDto,
         });
+
+        await this.auditService.recordEvent({
+            organizationId: org.id,
+            entityType: 'ORGANIZATION',
+            entityId: org.id,
+            action: 'ORGANIZATION_UPDATED',
+            previousData,
+            newData: org,
+            performedById
+        });
+
+        return org;
     }
 
     async remove(id: string): Promise<void> {

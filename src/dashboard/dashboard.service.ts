@@ -130,8 +130,53 @@ export class DashboardService {
                 systemStatus: {
                     value: 99.9 // Placeholder as in UI
                 }
-            }
+            },
+            liveActivity: await this.getLiveActivity()
         };
+    }
+
+    async getLiveActivity() {
+        const events = await this.prisma.auditEvent.findMany({
+            where: {
+                action: {
+                    in: ['ORGANIZATION_CREATED', 'ORGANIZATION_UPDATED', 'ROLE_CREATED', 'ROLE_UPDATED']
+                }
+            },
+            include: {
+                performedBy: { select: { fullName: true } }
+            },
+            orderBy: { performedAt: 'desc' },
+            take: 15
+        });
+
+        return events.map(event => {
+            let message = '';
+            const data = (event.newData as any) || {};
+
+            switch (event.action) {
+                case 'ORGANIZATION_CREATED':
+                    message = `Nueva organización registrada: ${data.name || 'Desconocida'}`;
+                    break;
+                case 'ORGANIZATION_UPDATED':
+                    message = `Se actualizaron datos de la organización: ${data.name || 'Desconocida'}`;
+                    break;
+                case 'ROLE_CREATED':
+                    message = `Nuevo rol creado: ${data.name || 'Sin nombre'}`;
+                    break;
+                case 'ROLE_UPDATED':
+                    message = `Se actualizó el rol: ${data.name || 'Sin nombre'}`;
+                    break;
+                default:
+                    message = `Actividad en el sistema: ${event.action}`;
+            }
+
+            return {
+                id: event.id,
+                message,
+                user: event.performedBy?.fullName || 'Sistema',
+                time: event.performedAt
+            };
+        });
     }
 
     async getOrganizationsDetailList() {

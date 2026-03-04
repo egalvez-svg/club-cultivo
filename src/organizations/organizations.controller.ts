@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards, Delete, HttpCode, HttpStatus, ConflictException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, Delete, HttpCode, HttpStatus, ConflictException, Request } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto, UpdateOrganizationDto } from './dto/organization.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -32,16 +32,16 @@ export class OrganizationsController {
     @Post()
     @ApiOperation({ summary: 'Crear organización', description: 'Registra una nueva organización en el sistema' })
     @ApiResponse({ status: 201, description: 'Organización creada' })
-    create(@Body() createOrganizationDto: CreateOrganizationDto) {
-        return this.organizationsService.create(createOrganizationDto);
+    create(@Request() req, @Body() createOrganizationDto: CreateOrganizationDto) {
+        return this.organizationsService.create(createOrganizationDto, req.user.id);
     }
 
     @Patch(':id')
     @ApiOperation({ summary: 'Actualizar organización', description: 'Modifica datos de una organización existente' })
     @ApiResponse({ status: 200, description: 'Organización actualizada' })
     @ApiParam({ name: 'id', description: 'ID de la organización' })
-    update(@Param('id') id: string, @Body() updateOrganizationDto: UpdateOrganizationDto) {
-        return this.organizationsService.update(id, updateOrganizationDto);
+    update(@Request() req, @Param('id') id: string, @Body() updateOrganizationDto: UpdateOrganizationDto) {
+        return this.organizationsService.update(id, updateOrganizationDto, req.user.id);
     }
 
     @Delete(':id')

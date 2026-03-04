@@ -3,12 +3,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Role } from '@prisma/client';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class RolesService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private auditService: AuditService
+    ) { }
 
-    async create(organizationId: string, createDto: CreateRoleDto): Promise<Role> {
+    async create(organizationId: string, createDto: CreateRoleDto, performedById: string): Promise<Role> {
         const name = createDto.name.toUpperCase();
 
         const existing = await this.prisma.role.findFirst({
@@ -25,12 +29,23 @@ export class RolesService {
             throw new ConflictException('Ya existe un rol con ese nombre en esta organización o en el sistema.');
         }
 
-        return this.prisma.role.create({
+        const role = await this.prisma.role.create({
             data: {
                 name,
                 organizationId
             }
         });
+
+        await this.auditService.recordEvent({
+            organizationId: organizationId || 'SYSTEM', // Fallback to SYSTEM if global
+            entityType: 'ROLE',
+            entityId: role.id,
+            action: 'ROLE_CREATED',
+            newData: role,
+            performedById
+        });
+
+        return role;
     }
 
     async findAll(organizationId: string): Promise<Role[]> {
@@ -79,10 +94,10 @@ export class RolesService {
         });
     }
 
-    async update(organizationId: string, id: string, updateDto: UpdateRoleDto): Promise<Role> {
-        const role = await this.findOne(organizationId, id);
+    async update(organizationId: string, id: string, updateDto: UpdateRoleDto, performedById: string): Promise<Role> {
+        const previousData = await this.findOne(organizationId, id);
 
-        if (role.organizationId === null) {
+        if (previousData.organizationId === null) {
             throw new ConflictException('No se puede modificar un rol del sistema');
         }
 
@@ -105,10 +120,22 @@ export class RolesService {
             updateDto.name = newName;
         }
 
-        return this.prisma.role.update({
+        const role = await this.prisma.role.update({
             where: { id },
             data: updateDto
         });
+
+        await this.auditService.recordEvent({
+            organizationId: organizationId || 'SYSTEM',
+            entityType: 'ROLE',
+            entityId: role.id,
+            action: 'ROLE_UPDATED',
+            previousData,
+            newData: role,
+            performedById
+        });
+
+        return role;
     }
 
     async remove(organizationId: string, id: string): Promise<{ message: string }> {
