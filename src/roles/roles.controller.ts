@@ -1,13 +1,14 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Query } from '@nestjs/common';
 import { RolesService } from './roles.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 
 @ApiTags('Roles')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('roles')
 export class RolesController {
     constructor(private readonly rolesService: RolesService) { }
@@ -24,8 +25,9 @@ export class RolesController {
     @Get()
     @ApiOperation({ summary: 'Listar roles', description: 'Retorna todos los roles disponibles para la organización (incluye los del sistema)' })
     @ApiResponse({ status: 200, description: 'Lista de roles' })
-    findAll(@Request() req) {
-        return this.rolesService.findAll(req.user.organizationId);
+    findAll(@Request() req, @Query('organizationId') orgId?: string) {
+        const targetOrgId = (req.user.role === 'SUPER_ADMIN' && orgId) ? orgId : req.user.organizationId;
+        return this.rolesService.findAll(targetOrgId);
     }
 
     @Get(':id')
