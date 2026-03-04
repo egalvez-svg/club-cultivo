@@ -9,7 +9,10 @@ export class OrganizationsService {
 
     async findAll(): Promise<Organization[]> {
         return this.prisma.organization.findMany({
-            where: { active: true }
+            where: {
+                active: true,
+                name: { not: 'SYSTEM' }
+            }
         });
     }
 
