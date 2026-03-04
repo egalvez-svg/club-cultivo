@@ -16,11 +16,15 @@ async function main() {
     console.log(`System Organization: ${sysOrg.id}`);
 
     // 2. Global Roles
-    const superAdminRole = await prisma.role.upsert({
-        where: { organizationId_name: { organizationId: null as any, name: 'SUPER_ADMIN' } },
-        update: {},
-        create: { name: 'SUPER_ADMIN', organizationId: null },
+    let superAdminRole = await prisma.role.findFirst({
+        where: { organizationId: null, name: 'SUPER_ADMIN' }
     });
+
+    if (!superAdminRole) {
+        superAdminRole = await prisma.role.create({
+            data: { name: 'SUPER_ADMIN', organizationId: null },
+        });
+    }
 
     // 3. Create SuperAdmin User
     const superAdminEmail = 'superadmin@clubcultivo.com';

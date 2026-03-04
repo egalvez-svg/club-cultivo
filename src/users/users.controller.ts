@@ -15,7 +15,7 @@ export class UsersController {
     @ApiOperation({ summary: 'Listar usuarios', description: 'Retorna los usuarios activos de la organización' })
     @ApiResponse({ status: 200, description: 'Lista de usuarios' })
     findAll(@Request() req) {
-        return this.usersService.findAll(req.user.organizationId);
+        return this.usersService.findAll(req.user.organizationId, req.user.role === 'SUPER_ADMIN');
     }
 
     @Post()

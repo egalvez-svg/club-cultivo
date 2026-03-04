@@ -7,16 +7,22 @@ import * as bcrypt from 'bcryptjs';
 export class UsersService {
     constructor(private prisma: PrismaService) { }
 
-    async findAll(organizationId: string) {
+    async findAll(organizationId: string, isSuperAdmin: boolean = false) {
+        const where: any = {
+            active: true,
+            userRoles: {
+                some: { role: { NOT: { name: 'PATIENT' } } }
+            }
+        };
+
+        if (!isSuperAdmin) {
+            where.organizationId = organizationId;
+        }
+
         const users = await this.prisma.user.findMany({
-            where: {
-                organizationId,
-                active: true,
-                userRoles: {
-                    some: { role: { NOT: { name: 'PATIENT' } } }
-                }
-            },
+            where,
             include: { userRoles: { include: { role: true } }, organization: true },
+            orderBy: isSuperAdmin ? { organizationId: 'asc' } : undefined
         });
         return users.map(user => {
             const { passwordHash, hashedRefreshToken, ...rest } = user;
