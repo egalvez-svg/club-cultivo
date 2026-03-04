@@ -428,6 +428,7 @@ model GeneratedReport {
   type           ReportType
   fileUrl        String?
   fileSize       Int?
+  content        Bytes?
   generatedById  String
   createdAt      DateTime     @default(now())
 

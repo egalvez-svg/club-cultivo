@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Request, Res, Param } from '@nestjs/common';
 import { Response } from 'express';
 import { ReportsService } from './reports.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -133,5 +133,26 @@ export class ReportsController {
     @ApiOperation({ summary: 'Proyección de Stock', description: 'Estado actual y disponibilidad de producto terminado' })
     getStockProjection(@Request() req) {
         return this.reportsService.getStockProjection(req.user.organizationId);
+    }
+
+    @Get('download/:id')
+    @ApiOperation({ summary: 'Descargar Reporte Histórico', description: 'Permite descargar un PDF generado previamente' })
+    async downloadReport(
+        @Param('id') id: string,
+        @Res() res: Response
+    ) {
+        const result = await this.reportsService.getGeneratedReportContent(id);
+
+        if (!result) {
+            return res.status(404).json({ message: 'Reporte no encontrado' });
+        }
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="${result.name}"`,
+            'Content-Length': result.content.length,
+        });
+
+        res.end(result.content);
     }
 }

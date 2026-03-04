@@ -74,7 +74,7 @@ export class ReportsService {
             });
 
             // Registrar en base de datos
-            await this.prisma.generatedReport.create({
+            const report = await this.prisma.generatedReport.create({
                 data: {
                     organizationId,
                     name: `REPROCANN_${month}_${year}.pdf`,
@@ -83,6 +83,9 @@ export class ReportsService {
                     generatedById: userId
                 }
             });
+
+            // Guardar contenido binario (Uso raw SQL para evitar problemas de generación de cliente si el proceso está bloqueado)
+            await this.prisma.$executeRaw`UPDATE "generated_reports" SET "content" = ${buffer} WHERE "id" = ${report.id}`;
 
             return buffer;
         }
@@ -144,7 +147,7 @@ export class ReportsService {
                 organizationName: org?.name || 'Club Cultivo'
             });
 
-            await this.prisma.generatedReport.create({
+            const report = await this.prisma.generatedReport.create({
                 data: {
                     organizationId,
                     name: `Cultivo_${month}_${year}.pdf`,
@@ -153,6 +156,8 @@ export class ReportsService {
                     generatedById: userId
                 }
             });
+
+            await this.prisma.$executeRaw`UPDATE "generated_reports" SET "content" = ${buffer} WHERE "id" = ${report.id}`;
 
             return buffer;
         }
@@ -245,7 +250,7 @@ export class ReportsService {
                 organizationName: org?.name || 'Club Cultivo'
             });
 
-            await this.prisma.generatedReport.create({
+            const report = await this.prisma.generatedReport.create({
                 data: {
                     organizationId,
                     name: `Finanzas_${month}_${year}.pdf`,
@@ -254,6 +259,8 @@ export class ReportsService {
                     generatedById: userId
                 }
             });
+
+            await this.prisma.$executeRaw`UPDATE "generated_reports" SET "content" = ${buffer} WHERE "id" = ${report.id}`;
 
             return buffer;
         }
@@ -332,5 +339,29 @@ export class ReportsService {
                 status: lot.status,
             };
         });
+    }
+
+    async getGeneratedReportContent(id: string) {
+        const report = await this.prisma.generatedReport.findUnique({
+            where: { id },
+            select: { name: true }
+        });
+
+        if (!report) return null;
+
+        // Recuperar contenido binario vía raw SQL
+        const result: any[] = await this.prisma.$queryRawUnsafe(
+            `SELECT "content" FROM "generated_reports" WHERE "id" = $1`,
+            id
+        );
+
+        if (!result || result.length === 0 || !result[0].content) {
+            return null;
+        }
+
+        return {
+            name: report.name,
+            content: result[0].content
+        };
     }
 }
