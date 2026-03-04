@@ -49,23 +49,25 @@ export class ReportsService {
                 doc.fontSize(12).fillColor('#333333').text(`Reporte de Entregas por Paciente`, { align: 'center' });
                 doc.moveDown();
 
-                const tableHeaders = ['Fecha', 'Paciente', 'DNI', 'Producto', 'Lote', 'Gramos'];
+                const tableHeaders = ['Fecha', 'Paciente', 'DNI', 'Producto', 'Lote', 'Cant. Física', 'Gramos'];
                 const tableRows: any[][] = [];
 
                 dispensations.forEach(d => {
                     d.items.forEach(item => {
+                        const unitLabel = item.product.physicalUnitType === 'UNIT' ? 'un' : item.product.physicalUnitType.toLowerCase();
                         tableRows.push([
                             d.confirmedAt ? d.confirmedAt.toLocaleDateString() : '-',
                             d.recipient.fullName,
                             d.recipient.documentNumber,
                             item.product.name,
                             item.productionLot.lotCode,
+                            `${item.quantityUnits} ${unitLabel}`,
                             `${item.equivalentDryGrams} gr`
                         ]);
                     });
                 });
 
-                this.pdfService.drawTable(doc, tableHeaders, tableRows, [60, 110, 75, 100, 80, 70]);
+                this.pdfService.drawTable(doc, tableHeaders, tableRows, [55, 95, 65, 80, 70, 70, 60]);
             }, {
                 title: `Trazabilidad de Pacientes - ${month}/${year}`,
                 organizationName: org?.name || 'Club Cultivo'
