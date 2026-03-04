@@ -84,18 +84,24 @@ async function main() {
 
     const createdStrains: any[] = [];
     for (const s of strainsData) {
-        const created = await prisma.strain.create({
-            data: {
-                organizationId: orgId,
-                name: s.name,
-                type: s.type,
-                thcPercentage: s.thc,
-                cbdPercentage: s.cbd,
-            },
+        let created = await prisma.strain.findFirst({
+            where: { organizationId: orgId, name: s.name }
         });
+
+        if (!created) {
+            created = await prisma.strain.create({
+                data: {
+                    organizationId: orgId,
+                    name: s.name,
+                    type: s.type,
+                    thcPercentage: s.thc,
+                    cbdPercentage: s.cbd,
+                },
+            });
+        }
         createdStrains.push(created);
     }
-    console.log(`Created ${createdStrains.length} strains.`);
+    console.log(`Processed ${createdStrains.length} strains.`);
 
     // 4. Patients
     const patientsData = [
@@ -129,66 +135,93 @@ async function main() {
 
     // 5. Lots and Products
     for (const strain of createdStrains) {
-        const lot = await prisma.productionLot.create({
-            data: {
-                organizationId: orgId,
-                strainId: strain.id,
-                lotCode: `LOT-${strain.name.substring(0, 3).toUpperCase()}-2024`,
-                lotType: LotType.CULTIVATION,
-                status: LotStatus.RELEASED,
-                totalOutputEquivalentGrams: 1000,
-            },
+        let lot = await prisma.productionLot.findFirst({
+            where: { organizationId: orgId, lotCode: `LOT-${strain.name.substring(0, 3).toUpperCase()}-2024` }
         });
+
+        if (!lot) {
+            lot = await prisma.productionLot.create({
+                data: {
+                    organizationId: orgId,
+                    strainId: strain.id,
+                    lotCode: `LOT-${strain.name.substring(0, 3).toUpperCase()}-2024`,
+                    lotType: LotType.CULTIVATION,
+                    status: LotStatus.RELEASED,
+                    totalOutputEquivalentGrams: 1000,
+                },
+            });
+        }
 
         // Flower
-        await prisma.product.create({
-            data: {
-                organizationId: orgId,
-                strainId: strain.id,
-                name: `${strain.name} - Flores`,
-                presentationType: ProductPresentationType.FLOWER,
-                physicalUnitType: PhysicalUnitType.GRAMS,
-                netPhysicalQuantity: 1,
-                equivalentDryGrams: 1,
-                price: 7500,
-                currentStock: 250,
-                lots: { connect: { id: lot.id } }
-            }
+        const flowerName = `${strain.name} - Flores`;
+        const existingFlower = await prisma.product.findFirst({
+            where: { organizationId: orgId, name: flowerName }
         });
 
-        // Optional types
-        if (strain.cbdPercentage > 10 || strain.type === StrainType.SATIVA) {
+        if (!existingFlower) {
             await prisma.product.create({
                 data: {
                     organizationId: orgId,
                     strainId: strain.id,
-                    name: `Aceite de ${strain.name} 30ml`,
-                    presentationType: ProductPresentationType.OIL,
-                    physicalUnitType: PhysicalUnitType.ML,
-                    netPhysicalQuantity: 30,
-                    equivalentDryGrams: 3,
-                    price: 18000,
-                    currentStock: 15,
+                    name: flowerName,
+                    presentationType: ProductPresentationType.FLOWER,
+                    physicalUnitType: PhysicalUnitType.GRAMS,
+                    netPhysicalQuantity: 1,
+                    equivalentDryGrams: 1,
+                    price: 7500,
+                    currentStock: 250,
                     lots: { connect: { id: lot.id } }
                 }
             });
         }
 
-        if (strain.type === StrainType.INDICA || strain.type === StrainType.HYBRID) {
-            await prisma.product.create({
-                data: {
-                    organizationId: orgId,
-                    strainId: strain.id,
-                    name: `Rosin ${strain.name}`,
-                    presentationType: ProductPresentationType.EXTRACT,
-                    physicalUnitType: PhysicalUnitType.GRAMS,
-                    netPhysicalQuantity: 1,
-                    equivalentDryGrams: 4,
-                    price: 12000,
-                    currentStock: 10,
-                    lots: { connect: { id: lot.id } }
-                }
+        // Optional types
+        if (strain.cbdPercentage > 10 || strain.type === StrainType.SATIVA) {
+            const oilName = `Aceite de ${strain.name} 30ml`;
+            const existingOil = await prisma.product.findFirst({
+                where: { organizationId: orgId, name: oilName }
             });
+
+            if (!existingOil) {
+                await prisma.product.create({
+                    data: {
+                        organizationId: orgId,
+                        strainId: strain.id,
+                        name: oilName,
+                        presentationType: ProductPresentationType.OIL,
+                        physicalUnitType: PhysicalUnitType.ML,
+                        netPhysicalQuantity: 30,
+                        equivalentDryGrams: 3,
+                        price: 18000,
+                        currentStock: 15,
+                        lots: { connect: { id: lot.id } }
+                    }
+                });
+            }
+        }
+
+        if (strain.type === StrainType.INDICA || strain.type === StrainType.HYBRID) {
+            const extractName = `Rosin ${strain.name}`;
+            const existingExtract = await prisma.product.findFirst({
+                where: { organizationId: orgId, name: extractName }
+            });
+
+            if (!existingExtract) {
+                await prisma.product.create({
+                    data: {
+                        organizationId: orgId,
+                        strainId: strain.id,
+                        name: extractName,
+                        presentationType: ProductPresentationType.EXTRACT,
+                        physicalUnitType: PhysicalUnitType.GRAMS,
+                        netPhysicalQuantity: 1,
+                        equivalentDryGrams: 4,
+                        price: 12000,
+                        currentStock: 10,
+                        lots: { connect: { id: lot.id } }
+                    }
+                });
+            }
         }
     }
 
@@ -205,17 +238,30 @@ async function main() {
         const appointmentDate = new Date();
         appointmentDate.setHours(times[i], i * 15, 0, 0);
 
-        await prisma.appointment.create({
-            data: {
+        const existingAppointment = await prisma.appointment.findFirst({
+            where: {
                 organizationId: orgId,
                 patientId: patients[i].id,
-                date: appointmentDate,
-                reason: reasons[i] || 'Consulta general',
-                status: 'PENDING'
+                date: {
+                    gte: new Date(appointmentDate.setMinutes(0, 0, 0)),
+                    lt: new Date(appointmentDate.setHours(23, 59, 59, 999))
+                }
             }
         });
+
+        if (!existingAppointment) {
+            await prisma.appointment.create({
+                data: {
+                    organizationId: orgId,
+                    patientId: patients[i].id,
+                    date: appointmentDate,
+                    reason: reasons[i] || 'Consulta general',
+                    status: 'PENDING'
+                }
+            });
+        }
     }
-    console.log(`Created ${patients.length} appointments for today.`);
+    console.log(`Processed appointments for today.`);
 
     console.log('Seed completed successfully!');
 }
