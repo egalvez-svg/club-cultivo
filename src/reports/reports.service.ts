@@ -67,7 +67,7 @@ export class ReportsService {
                     });
                 });
 
-                this.pdfService.drawTable(doc, tableHeaders, tableRows, [55, 95, 65, 80, 70, 70, 60]);
+                this.pdfService.drawTable(doc, tableHeaders, tableRows, [70, 90, 65, 80, 65, 65, 60]);
             }, {
                 title: `Trazabilidad de Pacientes - ${month}/${year}`,
                 organizationName: org?.name || 'Club Cultivo'
