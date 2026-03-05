@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { User, Role, Organization, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -19,6 +20,7 @@ export class AuthService {
         private usersService: UsersService,
         private jwtService: JwtService,
         private mailService: MailService,
+        private prisma: PrismaService,
     ) { }
 
     async validateUser(email: string, pass: string): Promise<SafeUser | null> {
@@ -55,6 +57,7 @@ export class AuthService {
                 })),
                 activeRole: defaultRoleName,
                 organization: user.organization,
+                requiresPasswordChange: user.requiresPasswordChange,
             }
         };
     }
@@ -147,6 +150,35 @@ export class AuthService {
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
         await this.usersService.updatePassword(user.id, hashedPassword);
+
+        // Resetting password via token also clears the forced change flag
+        await this.prisma.user.update({
+            where: { id: user.id },
+            data: { requiresPasswordChange: false }
+        });
+
+        return { message: 'Contraseña actualizada correctamente' };
+    }
+
+    async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<{ message: string }> {
+        const user = await this.usersService.findByIdWithRelations(userId);
+        if (!user || !user.passwordHash) {
+            throw new UnauthorizedException('Usuario no encontrado');
+        }
+
+        const passwordMatches = await bcrypt.compare(currentPassword, user.passwordHash);
+        if (!passwordMatches) {
+            throw new UnauthorizedException('La contraseña actual es incorrecta');
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await this.usersService.updatePassword(userId, hashedPassword);
+
+        // Success! Clear the forced change flag
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { requiresPasswordChange: false }
+        });
 
         return { message: 'Contraseña actualizada correctamente' };
     }

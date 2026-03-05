@@ -2,6 +2,7 @@ import { Controller, Post, Body, UnauthorizedException, Get, Request, UseGuards 
 import { AuthService } from './auth.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { LoginDto, ForgotPasswordDto, ResetPasswordDto, RefreshTokenDto } from './dto/auth.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 @ApiTags('Autenticación')
@@ -53,5 +54,15 @@ export class AuthController {
     @ApiResponse({ status: 200, description: 'Datos del usuario' })
     async getProfile(@Request() req) {
         return req.user;
+    }
+
+    @Post('change-password')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Cambiar contraseña', description: 'Permite al usuario autenticado cambiar su contraseña' })
+    @ApiResponse({ status: 200, description: 'Contraseña actualizada' })
+    @ApiResponse({ status: 401, description: 'Contraseña actual incorrecta' })
+    async changePassword(@Request() req, @Body() changePasswordDto: ChangePasswordDto) {
+        return this.authService.changePassword(req.user.id, changePasswordDto.currentPassword, changePasswordDto.newPassword);
     }
 }

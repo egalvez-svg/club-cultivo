@@ -77,6 +77,7 @@ model User {
   payments               Payment[]
   reprocanRecords        ReprocanRecord[]
   stockMovements         StockMovement[]
+  requiresPasswordChange Boolean               @default(false)
   userRoles              UserRole[]
   appointments           Appointment[]
   generatedReports       GeneratedReport[]
@@ -407,10 +408,13 @@ model Appointment {
   id             String            @id @default(uuid())
   organizationId String
   organization   Organization      @relation(fields: [organizationId], references: [id])
-  
-  patientId      String
-  patient        User              @relation(fields: [patientId], references: [id])
-  
+
+  patientId      String?
+  patient        User?             @relation(fields: [patientId], references: [id])
+
+  guestName      String?
+  guestPhone     String?
+
   date           DateTime
   reason         String
   status         AppointmentStatus @default(PENDING)

@@ -81,7 +81,7 @@ export class DashboardService {
             todayAppointments: todayAppointments.map(a => ({
                 id: a.id,
                 time: a.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                patientName: a.patient.fullName,
+                patientName: a.patient?.fullName || a.guestName,
                 reason: a.reason,
             })),
         };

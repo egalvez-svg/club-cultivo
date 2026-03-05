@@ -5,7 +5,7 @@ import { RolesService } from '../roles/roles.service';
 import { ReprocanService } from '../reprocan/reprocan.service';
 import { AuditService } from '../audit/audit.service';
 
-const DEFAULT_PASSWORD = 'bienvenidoalClub123!';
+const DEFAULT_PASSWORD = process.env.PATIENT_DEFAULT_PASSWORD || 'bienvenidoalClub123!';
 
 @Injectable()
 export class PatientsService {
@@ -125,6 +125,7 @@ export class PatientsService {
                     passwordHash: hashedPassword,
                     dailyDose: data.dailyDose,
                     organizationId,
+                    requiresPasswordChange: true,
                     userRoles: {
                         create: { roleId, isDefault: true },
                     },

@@ -69,6 +69,7 @@ export class UsersService {
                         passwordHash: hashedPassword,
                         organizationId: finalOrgId,
                         active: true,
+                        requiresPasswordChange: true,
                         resetPasswordToken: null,
                         resetPasswordExpires: null,
                         hashedRefreshToken: null,
@@ -90,6 +91,7 @@ export class UsersService {
                     email: createUserDto.email,
                     passwordHash: hashedPassword,
                     organizationId: finalOrgId,
+                    requiresPasswordChange: true,
                     userRoles: {
                         create: createUserDto.roleIds.map((id, index) => ({
                             roleId: id,
@@ -127,6 +129,13 @@ export class UsersService {
 
         if (updateUserDto.password) {
             data.passwordHash = await bcrypt.hash(updateUserDto.password, 10);
+            // If the user is updating their own password, we clear the flag.
+            // If an admin is updating it, we set/keep it as true (force change).
+            // We'll assume for now that if an ID is passed and it's not the same as the requester (to be refined if needed),
+            // but the controller currently doesn't pass the requester ID to this service method easily without changing signature.
+            // Re-evaluating: The prompt says "when we create a user, we create a temp password". 
+            // If an admin updates a password, it should probably be forced again.
+            data.requiresPasswordChange = true;
             delete data.password;
         }
 
