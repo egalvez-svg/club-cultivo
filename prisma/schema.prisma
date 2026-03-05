@@ -24,6 +24,7 @@ model Organization {
   strains       Strain[]
   users         User[]
   appointments    Appointment[]
+  availabilityConfigs AvailabilityConfig[]
   generatedReports GeneratedReport[]
 
   @@map("organizations")
@@ -416,13 +417,36 @@ model Appointment {
   guestPhone     String?
 
   date           DateTime
-  reason         String
+  reason         AppointmentReason
   status         AppointmentStatus @default(PENDING)
+  isExternal     Boolean           @default(false)
 
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
   @@map("appointments")
+}
+
+model AvailabilityConfig {
+  id             String            @id @default(uuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+
+  reason         AppointmentReason
+  dayOfWeek      Int               // 0 (Sunday) to 6 (Saturday)
+  startTime      String            // "HH:mm"
+  endTime        String            // "HH:mm"
+  slotDuration   Int               @default(30) // minutes
+
+  @@map("availability_configs")
+}
+
+enum AppointmentReason {
+  DISPENSATION
+  MEDICAL_CONSULTATION
+  REPROCAN_RENEWAL
+  REPROCAN_REGISTRATION
+  OTHER
 }
 
 model GeneratedReport {

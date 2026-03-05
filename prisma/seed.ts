@@ -1,5 +1,4 @@
-
-import { PrismaClient, PatientStatus, LotType, LotStatus, StrainType, ProductPresentationType, PhysicalUnitType } from '@prisma/client';
+import { PrismaClient, AppointmentReason } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -28,11 +27,14 @@ async function main() {
 
     // 3. Create SuperAdmin User
     const superAdminEmail = 'superadmin@clubcultivo.com';
-    const hashedPassword = await require('bcryptjs').hash('superadmin123', 10);
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash('superadmin123', 10);
 
     await prisma.user.upsert({
         where: { email: superAdminEmail },
-        update: {},
+        update: {
+            passwordHash: hashedPassword,
+        },
         create: {
             email: superAdminEmail,
             passwordHash: hashedPassword,
@@ -47,7 +49,7 @@ async function main() {
             },
         },
     });
-    console.log('SuperAdmin user created: superadmin@clubcultivo.com / superadmin123');
+    console.log('SuperAdmin user: superadmin@clubcultivo.com / superadmin123');
 
     console.log('Seed completed successfully!');
 }

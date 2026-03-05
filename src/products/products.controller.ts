@@ -19,6 +19,13 @@ export class ProductsController {
         return this.productsService.create(req.user.organizationId, createProductDto);
     }
 
+    @Get('catalog')
+    @ApiOperation({ summary: 'Catalogo para pacientes', description: 'Productos disponibles con info de cepa, precio y presentacion. Sin datos internos de stock/lotes.' })
+    @ApiResponse({ status: 200, description: 'Catalogo retornado' })
+    findCatalog(@Request() req) {
+        return this.productsService.findCatalog(req.user.organizationId);
+    }
+
     @Get()
     @ApiOperation({ summary: 'Obtener todo el catálogo de productos con su stock' })
     @ApiResponse({ status: 200, description: 'Catálogo retornado' })

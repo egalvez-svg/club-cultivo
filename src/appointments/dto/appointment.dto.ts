@@ -1,11 +1,6 @@
 import { IsString, IsDateString, IsOptional, IsEnum, ValidateIf } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-
-export enum AppointmentStatus {
-    PENDING = 'PENDING',
-    COMPLETED = 'COMPLETED',
-    CANCELLED = 'CANCELLED',
-}
+import { AppointmentStatus, AppointmentReason } from '../../common/enums/appointment.enum';
 
 export class CreateAppointmentDto {
     @ApiPropertyOptional({ description: 'ID del paciente (si ya es paciente registrado)' })
@@ -27,9 +22,13 @@ export class CreateAppointmentDto {
     @IsDateString()
     date: string;
 
-    @ApiProperty({ description: 'Motivo del turno' })
-    @IsString()
-    reason: string;
+    @ApiProperty({ description: 'Motivo del turno', enum: AppointmentReason })
+    @IsEnum(AppointmentReason)
+    reason: AppointmentReason;
+
+    @ApiPropertyOptional({ description: 'Es un paciente externo?' })
+    @IsOptional()
+    isExternal?: boolean;
 }
 
 export class UpdateAppointmentDto {
@@ -43,10 +42,10 @@ export class UpdateAppointmentDto {
     @IsOptional()
     date?: string;
 
-    @ApiPropertyOptional({ description: 'Motivo del turno' })
-    @IsString()
+    @ApiPropertyOptional({ description: 'Motivo del turno', enum: AppointmentReason })
+    @IsEnum(AppointmentReason)
     @IsOptional()
-    reason?: string;
+    reason?: AppointmentReason;
 
     @ApiPropertyOptional({ description: 'Estado del turno', enum: AppointmentStatus })
     @IsEnum(AppointmentStatus)

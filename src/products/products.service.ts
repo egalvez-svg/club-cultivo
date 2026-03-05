@@ -157,6 +157,48 @@ export class ProductsService {
         });
     }
 
+    async findCatalog(organizationId: string) {
+        const products = await this.prisma.product.findMany({
+            where: { organizationId, active: true },
+            include: {
+                strain: {
+                    select: {
+                        id: true,
+                        name: true,
+                        type: true,
+                        genetics: true,
+                        thcPercentage: true,
+                        cbdPercentage: true,
+                    },
+                },
+            },
+            orderBy: [{ strain: { name: 'asc' } }, { name: 'asc' }],
+        });
+
+        // Agrupar por cepa
+        const strainMap = new Map<string, { strain: any; products: any[] }>();
+
+        for (const p of products) {
+            const strainId = p.strain.id;
+            if (!strainMap.has(strainId)) {
+                strainMap.set(strainId, { strain: p.strain, products: [] });
+            }
+            strainMap.get(strainId)!.products.push({
+                id: p.id,
+                name: p.name,
+                presentationType: p.presentationType,
+                physicalUnitType: p.physicalUnitType,
+                netPhysicalQuantity: p.netPhysicalQuantity,
+                equivalentDryGrams: p.equivalentDryGrams,
+                price: p.price,
+                stock: p.currentStock,
+                available: p.currentStock > 0,
+            });
+        }
+
+        return Array.from(strainMap.values());
+    }
+
     async decrementStock(productId: string, quantity: number, tx: any) {
         return tx.product.update({
             where: { id: productId },

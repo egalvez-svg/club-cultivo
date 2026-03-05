@@ -1,15 +1,30 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AvailabilityService } from '../availability/availability.service';
+import { AppointmentReason } from '../common/enums/appointment.enum';
 import { CreateAppointmentDto, UpdateAppointmentDto } from './dto/appointment.dto';
 
 @Injectable()
 export class AppointmentsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private availabilityService: AvailabilityService,
+    ) { }
 
     async create(organizationId: string, createDto: CreateAppointmentDto) {
         if (!createDto.patientId && !createDto.guestName) {
             throw new BadRequestException('Debe indicar un paciente o el nombre del visitante');
         }
+
+        // Force UTC to ensure wall-time consistency (T10:00 stays 10:00 in DB)
+        let dateStr = createDto.date;
+        if (!dateStr.includes('Z') && !dateStr.includes('+') && !dateStr.includes('-')) {
+            dateStr += 'Z';
+        }
+        const date = new Date(dateStr);
+
+        // Validate availability slot
+        await this.availabilityService.validateSlot(organizationId, date, createDto.reason);
 
         return this.prisma.appointment.create({
             data: {
@@ -17,7 +32,7 @@ export class AppointmentsService {
                 ...(createDto.patientId && { patient: { connect: { id: createDto.patientId } } }),
                 guestName: createDto.guestName,
                 guestPhone: createDto.guestPhone,
-                date: new Date(createDto.date),
+                date: date,
                 reason: createDto.reason,
             },
             include: {
@@ -42,10 +57,7 @@ export class AppointmentsService {
                 organizationId,
                 patientId,
                 ...(search && {
-                    reason: {
-                        contains: search,
-                        mode: 'insensitive',
-                    },
+                    reason: search as AppointmentReason,
                 }),
             },
             include: {
@@ -86,7 +98,11 @@ export class AppointmentsService {
         return this.prisma.appointment.update({
             where: { id },
             data: {
-                ...(updateDto.date && { date: new Date(updateDto.date) }),
+                ...(updateDto.date && {
+                    date: new Date(updateDto.date.includes('Z') || updateDto.date.includes('+') || updateDto.date.includes('-')
+                        ? updateDto.date
+                        : updateDto.date + 'Z')
+                }),
                 ...(updateDto.reason && { reason: updateDto.reason }),
                 ...(updateDto.status && { status: updateDto.status }),
             },
