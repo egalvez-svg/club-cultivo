@@ -271,6 +271,110 @@ export class PatientsService {
         });
     }
 
+    async getMyDashboard(organizationId: string, patientId: string) {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        const patient = await this.prisma.user.findFirst({
+            where: {
+                id: patientId,
+                organizationId,
+                userRoles: { some: { role: { name: 'PATIENT' } } },
+            },
+            include: {
+                organization: { select: { name: true } },
+                reprocanRecords: {
+                    where: { status: 'ACTIVE' },
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                },
+                dispensations: {
+                    where: {
+                        status: 'CONFIRMED',
+                        confirmedAt: { gte: startOfMonth, lte: endOfMonth },
+                    },
+                    select: { totalEquivalentGrams: true },
+                },
+                appointments: {
+                    where: {
+                        status: 'PENDING',
+                        date: { gte: now },
+                    },
+                    orderBy: { date: 'asc' },
+                    take: 5,
+                },
+            },
+        });
+
+        if (!patient) {
+            throw new NotFoundException('Paciente no encontrado');
+        }
+
+        // Consumo mensual
+        const consumedThisMonth = patient.dispensations.reduce(
+            (sum, d) => sum + d.totalEquivalentGrams, 0,
+        );
+        const monthlyAllowance = (patient.dailyDose || 0) * 30;
+        const available = Math.max(0, monthlyAllowance - consumedThisMonth);
+
+        // Ultima dispensacion (fuera del rango mensual)
+        const lastDispensation = await this.prisma.dispensation.findFirst({
+            where: { recipientId: patientId, status: 'CONFIRMED' },
+            orderBy: { confirmedAt: 'desc' },
+            select: {
+                id: true,
+                confirmedAt: true,
+                totalEquivalentGrams: true,
+                totalRecoveryAmount: true,
+                items: {
+                    select: { product: { select: { name: true } }, quantityUnits: true },
+                },
+            },
+        });
+
+        // Reprocan
+        const reprocan = patient.reprocanRecords[0] || null;
+        const daysRemaining = reprocan?.expirationDate
+            ? Math.max(0, Math.ceil((reprocan.expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+            : 0;
+
+        return {
+            patient: {
+                id: patient.id,
+                fullName: patient.fullName,
+                documentNumber: patient.documentNumber,
+                status: patient.status,
+                dailyDose: patient.dailyDose,
+            },
+            organization: {
+                name: patient.organization.name,
+            },
+            reprocan: reprocan ? {
+                reprocanNumber: reprocan.reprocanNumber,
+                status: reprocan.status,
+                expirationDate: reprocan.expirationDate,
+                createdAt: reprocan.createdAt,
+                daysRemaining,
+            } : null,
+            consumption: {
+                consumedThisMonth: Math.round(consumedThisMonth * 100) / 100,
+                monthlyAllowance: Math.round(monthlyAllowance * 100) / 100,
+                available: Math.round(available * 100) / 100,
+                progressPercent: monthlyAllowance > 0
+                    ? Math.round((consumedThisMonth / monthlyAllowance) * 100)
+                    : 0,
+                lastDispensation: lastDispensation || null,
+            },
+            pendingAppointments: patient.appointments.map(a => ({
+                id: a.id,
+                date: a.date,
+                reason: a.reason,
+                status: a.status,
+            })),
+        };
+    }
+
     async remove(organizationId: string, id: string, userId: string) {
         const patient = await this.findOne(organizationId, id);
 

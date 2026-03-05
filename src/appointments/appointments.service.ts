@@ -36,6 +36,25 @@ export class AppointmentsService {
         });
     }
 
+    async findByPatient(organizationId: string, patientId: string, search?: string) {
+        return this.prisma.appointment.findMany({
+            where: {
+                organizationId,
+                patientId,
+                ...(search && {
+                    reason: {
+                        contains: search,
+                        mode: 'insensitive',
+                    },
+                }),
+            },
+            include: {
+                patient: { select: { fullName: true, documentNumber: true } },
+            },
+            orderBy: { date: 'desc' },
+        });
+    }
+
     async findToday(organizationId: string, start: Date, end: Date) {
         return this.prisma.appointment.findMany({
             where: {

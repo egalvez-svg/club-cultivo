@@ -26,6 +26,13 @@ export class PatientsController {
         return this.patientsService.create(req.user.organizationId, createPatientDto, req.user.id);
     }
 
+    @Get('me/dashboard')
+    @ApiOperation({ summary: 'Mi panel de paciente', description: 'Retorna toda la informacion del dashboard del paciente autenticado: reprocan, consumo mensual, turnos pendientes' })
+    @ApiResponse({ status: 200, description: 'Dashboard del paciente' })
+    getMyDashboard(@Request() req) {
+        return this.patientsService.getMyDashboard(req.user.organizationId, req.user.id);
+    }
+
     @Get()
     @ApiOperation({ summary: 'Listar pacientes', description: 'Retorna todos los pacientes de la organización' })
     findAll(@Request() req) {

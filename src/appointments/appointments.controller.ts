@@ -24,6 +24,12 @@ export class AppointmentsController {
         return this.appointmentsService.findAll(req.user.organizationId);
     }
 
+    @Get('my')
+    @ApiOperation({ summary: 'Mis turnos', description: 'Retorna los turnos del paciente actualmente autenticado' })
+    findMy(@Request() req, @Body('search') search?: string) {
+        return this.appointmentsService.findByPatient(req.user.organizationId, req.user.id, search);
+    }
+
     @Get('today')
     @ApiOperation({ summary: 'Turnos de hoy', description: 'Retorna los turnos del dia actual' })
     findToday(@Request() req) {
