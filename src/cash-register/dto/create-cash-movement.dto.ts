@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsNumber, IsOptional, IsString, IsEnum } from 'class-validator';
-import { CashMovementType } from '@prisma/client';
+import { CashMovementType } from '../../common/enums';
 
 export class CreateCashMovementDto {
     @ApiProperty({ enum: CashMovementType, example: 'INCOME', description: 'Tipo de movimiento' })

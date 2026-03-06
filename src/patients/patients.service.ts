@@ -4,6 +4,7 @@ import * as bcrypt from 'bcryptjs';
 import { RolesService } from '../roles/roles.service';
 import { ReprocanService } from '../reprocan/reprocan.service';
 import { AuditService } from '../audit/audit.service';
+import { RoleName, AuditAction } from '../common/enums';
 
 const DEFAULT_PASSWORD = process.env.PATIENT_DEFAULT_PASSWORD || 'bienvenidoalClub123!';
 
@@ -18,7 +19,7 @@ export class PatientsService {
 
     private async getPatientRoleId() {
         const role = await this.prisma.role.findFirst({
-            where: { name: 'PATIENT' },
+            where: { name: RoleName.PATIENT },
         });
         if (!role) {
             // This case should be rare if seed is run, but keep for safety
@@ -32,6 +33,7 @@ export class PatientsService {
             where: { organizationId, documentNumber },
             include: {
                 userRoles: { include: { role: true } },
+                membership: true,
                 reprocanRecords: {
                     where: { status: 'ACTIVE' },
                     orderBy: { createdAt: 'desc' },
@@ -44,7 +46,7 @@ export class PatientsService {
             return { exists: false };
         }
 
-        const { passwordHash, hashedRefreshToken, resetPasswordToken, resetPasswordExpires, userRoles, reprocanRecords, ...rest } = user as any;
+        const { passwordHash, hashedRefreshToken, resetPasswordToken, resetPasswordExpires, userRoles, reprocanRecords, membership, ...rest } = user as any;
 
         const activeReprocan = reprocanRecords?.[0];
 
@@ -54,6 +56,9 @@ export class PatientsService {
             reprocanNumber: activeReprocan?.reprocanNumber || null,
             reprocanExpiration: activeReprocan?.expirationDate || null,
             reprocanStatus: activeReprocan?.status || null,
+            membershipStatus: membership?.status || null,
+            memberNumber: membership?.memberNumber || null,
+            minutesBookEntry: membership?.minutesBookEntry || null,
             roles: user.userRoles.map(ur => ur.role.name),
         };
     }
@@ -71,7 +76,7 @@ export class PatientsService {
 
         // Si ya existe y ya tiene rol PATIENT, error
         if (existing) {
-            const hasPatientRole = existing.userRoles.some(ur => ur.role.name === 'PATIENT');
+            const hasPatientRole = existing.userRoles.some(ur => ur.role.name === RoleName.PATIENT);
             if (hasPatientRole) {
                 throw new ConflictException('Este usuario ya está registrado como paciente');
             }
@@ -85,6 +90,8 @@ export class PatientsService {
                     where: { id: existing.id },
                     data: {
                         dailyDose: data.dailyDose ?? existing.dailyDose,
+                        address: data.address ?? existing.address,
+                        phone: data.phone ?? existing.phone,
                     },
                     include: { userRoles: { include: { role: true } } },
                 });
@@ -104,7 +111,7 @@ export class PatientsService {
                     organizationId,
                     entityType: 'Patient',
                     entityId: existing.id,
-                    action: 'ADD_PATIENT_ROLE',
+                    action: AuditAction.ADD_PATIENT_ROLE,
                     newData: updatedUser,
                     performedById: userId,
                 }, tx);
@@ -124,10 +131,18 @@ export class PatientsService {
                     email: data.email || null,
                     passwordHash: hashedPassword,
                     dailyDose: data.dailyDose,
+                    address: data.address || null,
+                    phone: data.phone || null,
                     organizationId,
                     requiresPasswordChange: true,
                     userRoles: {
                         create: { roleId, isDefault: true },
+                    },
+                    membership: {
+                        create: {
+                            organizationId,
+                            status: 'PENDING',
+                        }
                     },
                     ...(data.reprocanNumber && {
                         reprocanRecords: {
@@ -146,7 +161,7 @@ export class PatientsService {
                 organizationId,
                 entityType: 'Patient',
                 entityId: patient.id,
-                action: 'CREATE_PATIENT',
+                action: AuditAction.CREATE_PATIENT,
                 newData: patient,
                 performedById: userId,
             }, tx);
@@ -163,7 +178,7 @@ export class PatientsService {
         const patients = await this.prisma.user.findMany({
             where: {
                 organizationId,
-                userRoles: { some: { role: { name: 'PATIENT' } } }
+                userRoles: { some: { role: { name: RoleName.PATIENT } } }
             },
             include: {
                 dispensations: {
@@ -174,6 +189,7 @@ export class PatientsService {
                     select: { totalEquivalentGrams: true },
                 },
                 userRoles: { include: { role: true } },
+                membership: true,
                 reprocanRecords: {
                     where: { status: 'ACTIVE' },
                     orderBy: { createdAt: 'desc' },
@@ -197,6 +213,13 @@ export class PatientsService {
                 reprocanNumber: activeReprocan?.reprocanNumber || null,
                 reprocanExpiration: activeReprocan?.expirationDate || null,
                 reprocanStatus: activeReprocan?.status || null,
+                membershipStatus: rest.membership?.status || null,
+                memberNumber: rest.membership?.memberNumber || null,
+                minutesBookEntry: rest.membership?.minutesBookEntry || null,
+                address: patient.address || null,
+                phone: patient.phone || null,
+                applicationSignedAt: rest.membership?.applicationSignedAt || null,
+                dataConsentAcceptedAt: rest.membership?.dataConsentAcceptedAt || null,
             };
         });
     }
@@ -206,10 +229,11 @@ export class PatientsService {
             where: {
                 id,
                 organizationId,
-                userRoles: { some: { role: { name: 'PATIENT' } } }
+                userRoles: { some: { role: { name: RoleName.PATIENT } } }
             },
             include: {
                 userRoles: { include: { role: true } },
+                membership: true,
                 reprocanRecords: {
                     where: { status: 'ACTIVE' },
                     orderBy: { createdAt: 'desc' },
@@ -222,7 +246,7 @@ export class PatientsService {
             throw new NotFoundException('Paciente no encontrado');
         }
 
-        const { passwordHash, hashedRefreshToken, reprocanRecords, ...rest } = patient as any;
+        const { passwordHash, hashedRefreshToken, reprocanRecords, membership, ...rest } = patient as any;
         const activeReprocan = reprocanRecords?.[0];
 
         return {
@@ -230,6 +254,13 @@ export class PatientsService {
             reprocanNumber: activeReprocan?.reprocanNumber || null,
             reprocanExpiration: activeReprocan?.expirationDate || null,
             reprocanStatus: activeReprocan?.status || null,
+            membershipStatus: membership?.status || null,
+            memberNumber: membership?.memberNumber || null,
+            minutesBookEntry: membership?.minutesBookEntry || null,
+            address: patient.address || null,
+            phone: patient.phone || null,
+            applicationSignedAt: membership?.applicationSignedAt || null,
+            dataConsentAcceptedAt: membership?.dataConsentAcceptedAt || null,
         };
     }
 
@@ -245,6 +276,8 @@ export class PatientsService {
                     email: data.email,
                     dailyDose: data.dailyDose,
                     status: data.status,
+                    address: data.address,
+                    phone: data.phone,
                 },
                 include: { reprocanRecords: { where: { status: 'ACTIVE' }, take: 1 } }
             });
@@ -261,7 +294,7 @@ export class PatientsService {
                 organizationId,
                 entityType: 'Patient',
                 entityId: updatedPatient.id,
-                action: 'UPDATE_PATIENT',
+                action: AuditAction.UPDATE_PATIENT,
                 previousData: oldPatient,
                 newData: updatedPatient,
                 performedById: userId,
@@ -280,7 +313,7 @@ export class PatientsService {
             where: {
                 id: patientId,
                 organizationId,
-                userRoles: { some: { role: { name: 'PATIENT' } } },
+                userRoles: { some: { role: { name: RoleName.PATIENT } } },
             },
             include: {
                 organization: { select: { name: true } },
@@ -289,6 +322,7 @@ export class PatientsService {
                     orderBy: { createdAt: 'desc' },
                     take: 1,
                 },
+                membership: true,
                 dispensations: {
                     where: {
                         status: 'CONFIRMED',
@@ -346,6 +380,8 @@ export class PatientsService {
                 documentNumber: patient.documentNumber,
                 status: patient.status,
                 dailyDose: patient.dailyDose,
+                applicationSignedAt: patient.membership?.applicationSignedAt || null,
+                dataConsentAcceptedAt: patient.membership?.dataConsentAcceptedAt || null,
             },
             organization: {
                 name: patient.organization.name,
@@ -388,7 +424,7 @@ export class PatientsService {
                 organizationId,
                 entityType: 'Patient',
                 entityId: patient.id,
-                action: 'SUSPEND_PATIENT',
+                action: AuditAction.SUSPEND_PATIENT,
                 previousData: patient,
                 newData: updatedPatient,
                 performedById: userId,

@@ -1,6 +1,6 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, IsOptional, IsNumber, IsEnum, IsDateString } from 'class-validator';
-import { LotStatus } from '@prisma/client';
+import { LotStatus } from '../../common/enums';
 
 export class CreateLotDto {
     @ApiProperty({ example: 'LATE-2026-001', description: 'Código identificador único del lote' })

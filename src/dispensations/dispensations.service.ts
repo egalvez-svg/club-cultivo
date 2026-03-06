@@ -29,6 +29,16 @@ export class DispensationsService {
         const subtotalRecovery = createDto.items.reduce((sum, item) => sum + item.totalRecoveryAmount, 0);
         const totalRecoveryAmount = Math.max(0, subtotalRecovery - (createDto.discount || 0));
 
+        // 0. Validar membresía (Regla dura: Solo socios APPROVED)
+        const recipient = await this.prisma.user.findUnique({
+            where: { id: createDto.recipientId },
+            include: { membership: true }
+        });
+
+        if (!recipient?.membership || recipient.membership.status !== 'APPROVED') {
+            throw new BadRequestException('El paciente no es un socio aprobado por la ONG. No se puede dispensar.');
+        }
+
         // Ejecutar transacción
         return this.prisma.$transaction(async (prisma) => {
             // 1. Crear Dispensa

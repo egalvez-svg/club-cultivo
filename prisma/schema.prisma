@@ -11,6 +11,8 @@ datasource db {
 model Organization {
   id            String                @id @default(uuid())
   name          String
+  cuit          String?               // Tax ID
+  address       String?               // Legal address
   active        Boolean               @default(true)
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
@@ -66,6 +68,8 @@ model User {
   hashedRefreshToken     String?
   fullName               String
   documentNumber         String
+  address                String?               // Physical address
+  phone                  String?               // Contact phone
   status                 PatientStatus         @default(ACTIVE)
   dailyDose              Float?
   performedAudits        AuditEvent[]
@@ -77,6 +81,8 @@ model User {
   receivedPayments       Payment[]             @relation("Receiver")
   payments               Payment[]
   reprocanRecords        ReprocanRecord[]
+  membership             Membership?           @relation("UserMembership")
+  approvedMemberships    Membership[]          @relation("Approver")
   stockMovements         StockMovement[]
   requiresPasswordChange Boolean               @default(false)
   userRoles              UserRole[]
@@ -86,6 +92,35 @@ model User {
 
   @@unique([organizationId, documentNumber])
   @@map("users")
+}
+
+model Membership {
+  id               String           @id @default(uuid())
+  organizationId   String
+  userId           String           @unique
+  status           MembershipStatus @default(PENDING)
+  applicationDate  DateTime         @default(now())
+  approvedAt       DateTime?
+  approvedById     String?
+  // Book keeping fields for legal compliance
+  minutesBookEntry String? // Nº de Acta / Folio
+  memberNumber     String? // Nº de Socio correlativo
+  // Digital signatures
+  applicationSignedAt    DateTime?
+  dataConsentAcceptedAt  DateTime?
+  signatureIp            String?
+  signatureMetadata      Json?
+  user             User             @relation("UserMembership", fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy       User?            @relation("Approver", fields: [approvedById], references: [id])
+
+  @@map("memberships")
+}
+
+enum MembershipStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
 }
 
 model ReprocanRecord {

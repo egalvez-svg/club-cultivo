@@ -6,6 +6,7 @@ import { LotsService } from '../lots/lots.service';
 import { PaymentsService } from '../payments/payments.service';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RoleName, AuditAction, SYSTEM_ORGANIZATION } from '../common/enums';
 
 @Injectable()
 export class DashboardService {
@@ -93,19 +94,19 @@ export class DashboardService {
 
         // 1. Total Organizations (Active and not SYSTEM)
         const totalOrgs = await this.prisma.organization.count({
-            where: { active: true, NOT: { name: 'SYSTEM' } }
+            where: { active: true, NOT: { name: SYSTEM_ORGANIZATION } }
         });
         const orgsLastMonth = await this.prisma.organization.count({
-            where: { active: true, NOT: { name: 'SYSTEM' }, createdAt: { lt: firstDayCurrentMonth } }
+            where: { active: true, NOT: { name: SYSTEM_ORGANIZATION }, createdAt: { lt: firstDayCurrentMonth } }
         });
         const orgsGrowth = this.calculateGrowth(totalOrgs, orgsLastMonth);
 
         // 2. Total Users (Active)
         const totalUsers = await this.prisma.user.count({
-            where: { active: true, organization: { NOT: { name: 'SYSTEM' } } }
+            where: { active: true, organization: { NOT: { name: SYSTEM_ORGANIZATION } } }
         });
         const usersLastMonth = await this.prisma.user.count({
-            where: { active: true, organization: { NOT: { name: 'SYSTEM' } }, createdAt: { lt: firstDayCurrentMonth } }
+            where: { active: true, organization: { NOT: { name: SYSTEM_ORGANIZATION } }, createdAt: { lt: firstDayCurrentMonth } }
         });
         const usersGrowth = this.calculateGrowth(totalUsers, usersLastMonth);
 
@@ -139,7 +140,7 @@ export class DashboardService {
         const events = await this.prisma.auditEvent.findMany({
             where: {
                 action: {
-                    in: ['ORGANIZATION_CREATED', 'ORGANIZATION_UPDATED', 'ROLE_CREATED', 'ROLE_UPDATED']
+                    in: [AuditAction.ORGANIZATION_CREATED, AuditAction.ORGANIZATION_UPDATED, AuditAction.ROLE_CREATED, AuditAction.ROLE_UPDATED]
                 }
             },
             include: {
@@ -154,16 +155,16 @@ export class DashboardService {
             const data = (event.newData as any) || {};
 
             switch (event.action) {
-                case 'ORGANIZATION_CREATED':
+                case AuditAction.ORGANIZATION_CREATED:
                     message = `Nueva organización registrada: ${data.name || 'Desconocida'}`;
                     break;
-                case 'ORGANIZATION_UPDATED':
+                case AuditAction.ORGANIZATION_UPDATED:
                     message = `Se actualizaron datos de la organización: ${data.name || 'Desconocida'}`;
                     break;
-                case 'ROLE_CREATED':
+                case AuditAction.ROLE_CREATED:
                     message = `Nuevo rol creado: ${data.name || 'Sin nombre'}`;
                     break;
-                case 'ROLE_UPDATED':
+                case AuditAction.ROLE_UPDATED:
                     message = `Se actualizó el rol: ${data.name || 'Sin nombre'}`;
                     break;
                 default:
@@ -181,7 +182,7 @@ export class DashboardService {
 
     async getOrganizationsDetailList() {
         const organizations = await this.prisma.organization.findMany({
-            where: { active: true, NOT: { name: 'SYSTEM' } },
+            where: { active: true, NOT: { name: SYSTEM_ORGANIZATION } },
             include: {
                 _count: {
                     select: {
@@ -202,7 +203,7 @@ export class DashboardService {
                 where: {
                     organizationId: org.id,
                     active: true,
-                    userRoles: { some: { role: { name: 'PATIENT' } } }
+                    userRoles: { some: { role: { name: RoleName.PATIENT } } }
                 }
             });
 
@@ -210,7 +211,7 @@ export class DashboardService {
                 where: {
                     organizationId: org.id,
                     active: true,
-                    userRoles: { some: { role: { name: { not: 'PATIENT' } } } }
+                    userRoles: { some: { role: { name: { not: RoleName.PATIENT } } } }
                 }
             });
 

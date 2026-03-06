@@ -1,13 +1,14 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
+import { RoleName } from '../../common/enums';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
     constructor(private reflector: Reflector) { }
 
     canActivate(context: ExecutionContext): boolean {
-        const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
+        const requiredRoles = this.reflector.getAllAndOverride<RoleName[]>(ROLES_KEY, [
             context.getHandler(),
             context.getClass(),
         ]);
@@ -23,7 +24,7 @@ export class RolesGuard implements CanActivate {
         }
 
         // El SuperAdmin tiene acceso a todo por defecto
-        if (user.role === 'SUPER_ADMIN') {
+        if (user.role === RoleName.SUPER_ADMIN) {
             return true;
         }
 

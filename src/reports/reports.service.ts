@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 import { PdfService } from '../pdf/pdf.service';
@@ -338,6 +338,153 @@ export class ReportsService {
                 currentStock,
                 status: lot.status,
             };
+        });
+    }
+
+    async generateMembershipApplicationForm(membershipId: string, organizationId: string) {
+        const membership = await this.prisma.membership.findFirst({
+            where: { id: membershipId, organizationId },
+            include: { user: { include: { reprocanRecords: { where: { status: 'ACTIVE' }, take: 1 } } } }
+        });
+
+        if (!membership) throw new NotFoundException('Membresía no encontrada');
+
+        const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+        const user = membership.user;
+        const reprocan = user.reprocanRecords[0];
+
+        return this.pdfService.generatePdfBuffer((doc) => {
+            doc.fontSize(16).fillColor('#1b5e20').text('SOLICITUD DE INGRESO COMO ASOCIADO', { align: 'center', underline: true });
+            doc.moveDown(2);
+
+            doc.fontSize(11).fillColor('#333333');
+            doc.text(`Asociación Civil: ${org?.name || '[Nombre de la ONG]'}`);
+            doc.text(`CUIT: ${org?.cuit || '[●]'}`);
+            doc.text(`Domicilio legal: ${org?.address || '[●]'}`);
+            doc.moveDown(2);
+
+            doc.text(`Yo, ${user.fullName}, DNI Nº ${user.documentNumber}, con domicilio en ${user.address || '[●]'}, teléfono ${user.phone || '[●]'}, correo electrónico ${user.email || '[●]'}, solicito formalmente mi incorporación como asociado/a a la Asociación Civil ${org?.name || '[Nombre]'}.`);
+            doc.moveDown(2);
+
+            doc.fontSize(12).text('Declaro:', { underline: true });
+            doc.moveDown();
+
+            const declarations = [
+                'Que he leído y acepto el Estatuto Social y Reglamento Interno.',
+                'Que solicito el acceso a los fines sociales vinculados al acompañamiento y provisión de preparados a base de cannabis bajo el marco legal vigente.',
+                'Que cuento con indicación médica para el uso de cannabis medicinal.',
+                `Que me encuentro inscripto/a en REPROCANN Nº ${reprocan?.reprocanNumber || '[●]'}, con vencimiento el ${reprocan?.expirationDate ? reprocan.expirationDate.toLocaleDateString() : '[●]'}.`,
+                'Que entiendo que la asociación no persigue fines de lucro y que los aportes realizados son para recuperación de costos operativos.',
+                'Que autorizo el tratamiento de mis datos personales conforme Ley 25.326.'
+            ];
+
+            declarations.forEach(dec => {
+                doc.text(`• ${dec}`, { indent: 20 });
+                doc.moveDown(0.5);
+            });
+
+            doc.moveDown(4);
+            const yPos = doc.y;
+            doc.text('___________________', 50, yPos);
+            doc.text('___________________', 350, yPos);
+            doc.text('Firma', 50, yPos + 15, { width: 150, align: 'center' });
+            doc.text('Aclaración', 350, yPos + 15, { width: 150, align: 'center' });
+
+            doc.moveDown(2);
+            doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 50, doc.y + 30);
+
+            if (membership.applicationSignedAt) {
+                doc.moveDown(2);
+                doc.fontSize(8).fillColor('#666666').text(`Documento aceptado digitalmente el ${(membership.applicationSignedAt as Date).toLocaleString()} desde IP ${membership.signatureIp || 'N/A'}`, { align: 'right' });
+            }
+
+        }, {
+            title: 'Solicitud de Ingreso',
+            organizationName: org?.name || 'Club Cultivo'
+        });
+    }
+
+    async generateDataProtectionConsent(membershipId: string, organizationId: string) {
+        const membership = await this.prisma.membership.findFirst({
+            where: { id: membershipId, organizationId },
+            include: { user: true }
+        });
+
+        if (!membership) throw new NotFoundException('Membresía no encontrada');
+
+        const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+        const user = membership.user;
+
+        return this.pdfService.generatePdfBuffer((doc) => {
+            doc.fontSize(16).fillColor('#1b5e20').text('CONSENTIMIENTO INFORMADO – DATOS PERSONALES', { align: 'center', underline: true });
+            doc.moveDown(2);
+
+            doc.fontSize(11).fillColor('#333333');
+            doc.text(`En cumplimiento de la Ley 25.326, el/la solicitante ${user.fullName}, presta consentimiento para que la Asociación Civil ${org?.name || '[Nombre]'}:`);
+            doc.moveDown();
+
+            const items = [
+                'Recolecte datos personales y sensibles vinculados a su salud.',
+                'Utilice dichos datos exclusivamente para fines estatutarios.',
+                'Almacene información en soporte digital con medidas de seguridad adecuadas.',
+                'No ceda datos a terceros salvo obligación legal.'
+            ];
+
+            items.forEach(item => {
+                doc.text(`• ${item}`, { indent: 20 });
+                doc.moveDown(0.5);
+            });
+
+            doc.moveDown();
+            doc.text('Se informa que el titular podrá ejercer derechos de acceso, rectificación y supresión.');
+
+            doc.moveDown(5);
+            const yPos = doc.y;
+            doc.text('___________________', 50, yPos);
+            doc.text('Firma del Solicitante', 50, yPos + 15, { width: 150, align: 'center' });
+
+            doc.moveDown(2);
+            doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 50, doc.y + 30);
+
+            if (membership.dataConsentAcceptedAt) {
+                doc.moveDown(2);
+                doc.fontSize(8).fillColor('#666666').text(`Consentimiento aceptado digitalmente el ${(membership.dataConsentAcceptedAt as Date).toLocaleString()} desde IP ${membership.signatureIp || 'N/A'}`, { align: 'right' });
+            }
+
+        }, {
+            title: 'Anexo Ley 25.326',
+            organizationName: org?.name || 'Club Cultivo'
+        });
+    }
+
+    async generateMemberRegister(organizationId: string) {
+        const memberships = await this.prisma.membership.findMany({
+            where: { organizationId, status: 'APPROVED' },
+            include: { user: true },
+            orderBy: { memberNumber: 'asc' }
+        });
+
+        const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+
+        return this.pdfService.generatePdfBuffer((doc) => {
+            doc.fontSize(14).fillColor('#333333').text('LIBRO DE REGISTRO DE ASOCIADOS', { align: 'center' });
+            doc.moveDown();
+
+            const headers = ['Nº Socio', 'Nombre Completo', 'DNI', 'Acta/Folio', 'Fecha Ingreso', 'Estado'];
+            const rows = memberships.map(m => [
+                m.memberNumber || '-',
+                m.user.fullName,
+                m.user.documentNumber,
+                m.minutesBookEntry || '-',
+                m.approvedAt ? m.approvedAt.toLocaleDateString() : '-',
+                m.status
+            ]);
+
+            this.pdfService.drawTable(doc, headers, rows, [60, 140, 70, 80, 85, 60]);
+
+        }, {
+            title: 'Libro de Asociados Oficia',
+            organizationName: org?.name || 'Club Cultivo'
         });
     }
 

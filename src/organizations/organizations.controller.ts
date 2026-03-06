@@ -5,11 +5,12 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../roles/decorators/roles.decorator';
 import { RolesGuard } from '../roles/guards/roles.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import { RoleName } from '../common/enums';
 
 @ApiTags('Organizaciones')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('SUPER_ADMIN')
+@Roles(RoleName.SUPER_ADMIN)
 @Controller('organizations')
 export class OrganizationsController {
     constructor(private readonly organizationsService: OrganizationsService) { }

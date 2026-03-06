@@ -6,6 +6,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { RoleName } from '../common/enums';
 
 @ApiTags('Roles')
 @ApiBearerAuth()
@@ -15,7 +16,7 @@ export class RolesController {
     constructor(private readonly rolesService: RolesService) { }
 
     @Post()
-    @Roles('SUPER_ADMIN')
+    @Roles(RoleName.SUPER_ADMIN)
     @ApiOperation({ summary: 'Crear un nuevo rol', description: 'Crea un nuevo rol asociado a la organización proporcionada o a la del usuario' })
     @ApiResponse({ status: 201, description: 'Rol creado exitosamente' })
     @ApiResponse({ status: 400, description: 'Datos inválidos' })
@@ -43,7 +44,7 @@ export class RolesController {
     }
 
     @Patch(':id')
-    @Roles('SUPER_ADMIN')
+    @Roles(RoleName.SUPER_ADMIN)
     @ApiOperation({ summary: 'Actualizar un rol', description: 'Actualiza el nombre de un rol existente' })
     @ApiResponse({ status: 200, description: 'Rol actualizado' })
     @ApiResponse({ status: 404, description: 'Rol no encontrado' })
@@ -54,7 +55,7 @@ export class RolesController {
     }
 
     @Delete(':id')
-    @Roles('SUPER_ADMIN')
+    @Roles(RoleName.SUPER_ADMIN)
     @ApiOperation({ summary: 'Eliminar un rol', description: 'Elimina un rol si no tiene usuarios asignados' })
     @ApiResponse({ status: 200, description: 'Rol eliminado' })
     @ApiResponse({ status: 404, description: 'Rol no encontrado' })

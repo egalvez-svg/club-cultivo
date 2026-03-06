@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { MovementType } from '@prisma/client';
+import { MovementType } from '../common/enums';
 
 @Injectable()
 export class StockService {

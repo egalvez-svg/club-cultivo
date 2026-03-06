@@ -7,6 +7,16 @@ export class CreateOrganizationDto {
     @IsNotEmpty()
     name: string;
 
+    @ApiProperty({ example: '21-12345678-9', description: 'CUIT de la organización', required: false })
+    @IsString()
+    @IsOptional()
+    cuit?: string;
+
+    @ApiProperty({ example: 'Av. 18 de Julio 1234, Montevideo', description: 'Domicilio legal de la organización', required: false })
+    @IsString()
+    @IsOptional()
+    address?: string;
+
     @ApiProperty({ example: true, description: 'Estado de la organización', required: false })
     @IsBoolean()
     @IsOptional()
@@ -18,6 +28,16 @@ export class UpdateOrganizationDto {
     @IsString()
     @IsOptional()
     name?: string;
+
+    @ApiProperty({ example: '21-12345678-9', description: 'CUIT de la organización', required: false })
+    @IsString()
+    @IsOptional()
+    cuit?: string;
+
+    @ApiProperty({ example: 'Av. 18 de Julio 1234, Montevideo', description: 'Domicilio legal de la organización', required: false })
+    @IsString()
+    @IsOptional()
+    address?: string;
 
     @ApiProperty({ example: true, required: false })
     @IsBoolean()

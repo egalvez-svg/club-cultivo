@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentStatus, PaymentMethod, CashMovementType } from '@prisma/client';
+import { PaymentStatus, PaymentMethod, CashMovementType, AuditAction } from '../common/enums';
 import { CashRegisterService } from '../cash-register/cash-register.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -66,7 +66,7 @@ export class PaymentsService {
                 organizationId,
                 entityType: 'Payment',
                 entityId: payment.id,
-                action: 'REGISTER_PAYMENT',
+                action: AuditAction.REGISTER_PAYMENT,
                 previousData: payment,
                 newData: updatedPayment,
                 performedById: userId,

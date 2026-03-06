@@ -2,7 +2,7 @@ import { Controller, Get, Post, Delete, Query, Body, Param, UseGuards, Request }
 import { AvailabilityService } from './availability.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { AppointmentReason } from '../common/enums/appointment.enum';
+import { AppointmentReason } from '../common/enums';
 import { CreateAvailabilityConfigDto } from './dto/availability-config.dto';
 
 @ApiTags('Disponibilidad')

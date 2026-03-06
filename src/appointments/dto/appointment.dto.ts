@@ -1,6 +1,6 @@
 import { IsString, IsDateString, IsOptional, IsEnum, ValidateIf } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AppointmentStatus, AppointmentReason } from '../../common/enums/appointment.enum';
+import { AppointmentStatus, AppointmentReason } from '../../common/enums';
 
 export class CreateAppointmentDto {
     @ApiPropertyOptional({ description: 'ID del paciente (si ya es paciente registrado)' })

@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrganizationDto, UpdateOrganizationDto } from './dto/organization.dto';
 import { Organization } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { AuditAction, SYSTEM_ORGANIZATION } from '../common/enums';
 
 @Injectable()
 export class OrganizationsService {
@@ -15,7 +16,7 @@ export class OrganizationsService {
         return this.prisma.organization.findMany({
             where: {
                 active: true,
-                name: { not: 'SYSTEM' }
+                name: { not: SYSTEM_ORGANIZATION }
             }
         });
     }
@@ -30,6 +31,8 @@ export class OrganizationsService {
         const org = await this.prisma.organization.create({
             data: {
                 name: createOrganizationDto.name,
+                cuit: createOrganizationDto.cuit,
+                address: createOrganizationDto.address,
                 active: createOrganizationDto.active ?? true,
             },
         });
@@ -38,7 +41,7 @@ export class OrganizationsService {
             organizationId: org.id,
             entityType: 'ORGANIZATION',
             entityId: org.id,
-            action: 'ORGANIZATION_CREATED',
+            action: AuditAction.ORGANIZATION_CREATED,
             newData: org,
             performedById
         });
@@ -57,7 +60,7 @@ export class OrganizationsService {
             organizationId: org.id,
             entityType: 'ORGANIZATION',
             entityId: org.id,
-            action: 'ORGANIZATION_UPDATED',
+            action: AuditAction.ORGANIZATION_UPDATED,
             previousData,
             newData: org,
             performedById

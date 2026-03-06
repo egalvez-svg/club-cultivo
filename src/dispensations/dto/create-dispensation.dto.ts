@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsOptional, IsString, IsEnum, IsNumber, IsUUID, ValidateNested, IsArray, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PaymentMethod } from '@prisma/client';
+import { PaymentMethod } from '../../common/enums';
 
 export class CreateDispensationItemDto {
     @ApiProperty({ example: 'uuid', description: 'ID de la Cepa o Producto' })

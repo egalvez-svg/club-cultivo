@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsOptional, IsString, IsEnum, IsNumber, IsUUID } from 'class-validator';
-import { LotType, LotStatus } from '@prisma/client';
+import { LotType, LotStatus } from '../../common/enums';
 
 export class CreateLotDto {
     @ApiProperty({ example: 'uuid', description: 'ID de la Cepa (Strain)' })

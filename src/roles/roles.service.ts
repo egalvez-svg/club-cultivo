@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { AuditService } from '../audit/audit.service';
+import { RoleName, AuditAction, SYSTEM_ORGANIZATION } from '../common/enums';
 
 @Injectable()
 export class RolesService {
@@ -37,10 +38,10 @@ export class RolesService {
         });
 
         await this.auditService.recordEvent({
-            organizationId: organizationId || 'SYSTEM', // Fallback to SYSTEM if global
+            organizationId: organizationId || SYSTEM_ORGANIZATION,
             entityType: 'ROLE',
             entityId: role.id,
-            action: 'ROLE_CREATED',
+            action: AuditAction.ROLE_CREATED,
             newData: role,
             performedById
         });
@@ -51,7 +52,7 @@ export class RolesService {
     async findAll(organizationId: string): Promise<Role[]> {
         return this.prisma.role.findMany({
             where: {
-                name: { not: 'SUPER_ADMIN' },
+                name: { not: RoleName.SUPER_ADMIN },
                 OR: [
                     { organizationId: organizationId },
                     { organizationId: null }
@@ -126,10 +127,10 @@ export class RolesService {
         });
 
         await this.auditService.recordEvent({
-            organizationId: organizationId || 'SYSTEM',
+            organizationId: organizationId || SYSTEM_ORGANIZATION,
             entityType: 'ROLE',
             entityId: role.id,
-            action: 'ROLE_UPDATED',
+            action: AuditAction.ROLE_UPDATED,
             previousData,
             newData: role,
             performedById

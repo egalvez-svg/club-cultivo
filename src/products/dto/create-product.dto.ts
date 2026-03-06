@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsOptional, IsString, IsEnum, IsNumber, IsUUID, Min } from 'class-validator';
-import { ProductPresentationType, PhysicalUnitType } from '@prisma/client';
+import { ProductPresentationType, PhysicalUnitType } from '../../common/enums';
 
 export class CreateProductDto {
     @ApiProperty({ example: 'uuid', description: 'ID de la Cepa (Genética)' })

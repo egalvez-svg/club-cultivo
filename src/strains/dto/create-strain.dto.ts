@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsOptional, IsString, IsEnum, IsNumber } from 'class-validator';
-import { StrainType } from '@prisma/client';
+import { StrainType } from '../../common/enums';
 
 export class CreateStrainDto {
     @ApiProperty({ example: 'Amnesia Haze', description: 'Nombre de la cepa' })

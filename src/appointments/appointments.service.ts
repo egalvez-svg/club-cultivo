@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AvailabilityService } from '../availability/availability.service';
-import { AppointmentReason } from '../common/enums/appointment.enum';
+import { AppointmentReason } from '../common/enums';
 import { CreateAppointmentDto, UpdateAppointmentDto } from './dto/appointment.dto';
 
 @Injectable()

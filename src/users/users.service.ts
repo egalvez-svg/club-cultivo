@@ -2,6 +2,7 @@ import { Injectable, ConflictException, NotFoundException } from '@nestjs/common
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import * as bcrypt from 'bcryptjs';
+import { RoleName } from '../common/enums';
 
 @Injectable()
 export class UsersService {
@@ -11,7 +12,7 @@ export class UsersService {
         const where: any = {
             active: true,
             userRoles: {
-                some: { role: { NOT: { name: 'PATIENT' } } }
+                some: { role: { NOT: { name: RoleName.PATIENT } } }
             }
         };
 
@@ -221,7 +222,7 @@ export class UsersService {
             where: {
                 organizationId,
                 status: 'ACTIVE',
-                userRoles: { some: { role: { name: 'PATIENT' } } },
+                userRoles: { some: { role: { name: RoleName.PATIENT } } },
                 ...(dateLimit && { createdAt: { lt: dateLimit } })
             }
         });

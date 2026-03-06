@@ -7,6 +7,7 @@ import { PdfService } from '../pdf/pdf.service';
 @Module({
   imports: [PrismaModule],
   providers: [ReportsService, PdfService],
-  controllers: [ReportsController]
+  controllers: [ReportsController],
+  exports: [ReportsService]
 })
 export class ReportsModule { }

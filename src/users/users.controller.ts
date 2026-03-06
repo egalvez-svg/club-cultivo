@@ -3,6 +3,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import { RoleName } from '../common/enums';
 
 @ApiTags('Usuarios')
 @ApiBearerAuth()
@@ -15,7 +16,7 @@ export class UsersController {
     @ApiOperation({ summary: 'Listar usuarios', description: 'Retorna los usuarios activos de la organización' })
     @ApiResponse({ status: 200, description: 'Lista de usuarios' })
     findAll(@Request() req) {
-        return this.usersService.findAll(req.user.organizationId, req.user.role === 'SUPER_ADMIN');
+        return this.usersService.findAll(req.user.organizationId, req.user.role === RoleName.SUPER_ADMIN);
     }
 
     @Post()

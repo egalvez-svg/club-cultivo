@@ -27,6 +27,16 @@ export class CreatePatientDto {
     @IsOptional()
     reprocanExpiration?: string;
 
+    @ApiProperty({ example: 'av siempre viva 7456', description: 'Dirección física', required: false })
+    @IsString()
+    @IsOptional()
+    address?: string;
+
+    @ApiProperty({ example: '3513868384', description: 'Teléfono de contacto', required: false })
+    @IsString()
+    @IsOptional()
+    phone?: string;
+
     @ApiProperty({ example: 1.5, description: 'Dosis diaria prescrita en gramos', required: false })
     @IsNumber()
     @IsOptional()

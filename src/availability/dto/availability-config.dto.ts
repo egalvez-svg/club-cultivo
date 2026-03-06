@@ -1,6 +1,6 @@
 import { IsInt, IsString, IsEnum, Min, Max, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { AppointmentReason } from '../../common/enums/appointment.enum';
+import { AppointmentReason } from '../../common/enums';
 
 export class CreateAvailabilityConfigDto {
     @ApiProperty({ enum: AppointmentReason })

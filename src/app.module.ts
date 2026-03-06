@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -21,11 +21,19 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { PdfService } from './pdf/pdf.service';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { AvailabilityModule } from './availability/availability.module';
+import { MembershipModule } from './membership/membership.module';
+import { LoggerMiddleware } from './common/middleware/logger.middleware';
 
 @Module({
-  imports: [PrismaModule, AuthModule, PatientsModule, StrainsModule, ProductsModule, LotsModule, StockModule, DispensationsModule, PaymentsModule, ReportsModule, AuditModule, RolesModule, UsersModule, OrganizationsModule, ReprocanModule, CashRegisterModule, DashboardModule, AppointmentsModule, AvailabilityModule],
+  imports: [PrismaModule, AuthModule, PatientsModule, StrainsModule, ProductsModule, LotsModule, StockModule, DispensationsModule, PaymentsModule, ReportsModule, AuditModule, RolesModule, UsersModule, OrganizationsModule, ReprocanModule, CashRegisterModule, DashboardModule, AppointmentsModule, AvailabilityModule, MembershipModule],
   controllers: [AppController],
   providers: [AppService, PdfService],
   exports: [PdfService]
 })
-export class AppModule { }
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(LoggerMiddleware)
+      .forRoutes('*');
+  }
+}

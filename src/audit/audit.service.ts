@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { AuditAction } from '../common/enums';
 
 @Injectable()
 export class AuditService {
@@ -10,7 +11,7 @@ export class AuditService {
         organizationId: string;
         entityType: string;
         entityId: string;
-        action: string;
+        action: AuditAction;
         previousData?: any;
         newData?: any;
         performedById: string;
