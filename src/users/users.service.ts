@@ -267,13 +267,14 @@ export class UsersService {
         });
     }
 
-    async updatePassword(id: string, hashedPassword: string) {
+    async updatePassword(id: string, hashedPassword: string, clearFlag: boolean = true) {
         return this.prisma.user.update({
             where: { id },
             data: {
                 passwordHash: hashedPassword,
                 resetPasswordToken: null,
                 resetPasswordExpires: null,
+                ...(clearFlag && { requiresPasswordChange: false }),
             },
         });
     }

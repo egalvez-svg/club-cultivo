@@ -149,13 +149,7 @@ export class AuthService {
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        await this.usersService.updatePassword(user.id, hashedPassword);
-
-        // Resetting password via token also clears the forced change flag
-        await this.prisma.user.update({
-            where: { id: user.id },
-            data: { requiresPasswordChange: false }
-        });
+        await this.usersService.updatePassword(user.id, hashedPassword, true);
 
         return { message: 'Contraseña actualizada correctamente' };
     }
@@ -172,13 +166,7 @@ export class AuthService {
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await this.usersService.updatePassword(userId, hashedPassword);
-
-        // Success! Clear the forced change flag
-        await this.prisma.user.update({
-            where: { id: userId },
-            data: { requiresPasswordChange: false }
-        });
+        await this.usersService.updatePassword(userId, hashedPassword, true);
 
         return { message: 'Contraseña actualizada correctamente' };
     }
