@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ReprocanStatus" ADD VALUE 'PENDING_VALIDATION';

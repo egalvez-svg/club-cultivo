@@ -3,4 +3,5 @@ export enum RoleName {
     ADMIN = 'ADMIN',
     OPERATOR = 'OPERATOR',
     PATIENT = 'PATIENT',
+    APPLICANT = 'APPLICANT',
 }

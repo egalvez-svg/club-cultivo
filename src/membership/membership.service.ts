@@ -2,7 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { MembershipStatus } from '@prisma/client';
-import { AuditAction } from '../common/enums';
+import { AuditAction, RoleName, SignatureType } from '../common/enums';
+import { ApproveMembershipDto } from './dto/membership.dto';
 
 @Injectable()
 export class MembershipService {
@@ -17,11 +18,13 @@ export class MembershipService {
         });
     }
 
-    async findAll(organizationId: string, status?: MembershipStatus) {
+    async findAll(organizationId: string, status?: MembershipStatus | MembershipStatus[]) {
         return this.prisma.membership.findMany({
             where: {
                 organizationId,
-                ...(status && { status }),
+                ...(status && {
+                    status: Array.isArray(status) ? { in: status } : status
+                }),
             },
             include: {
                 user: {
@@ -43,12 +46,22 @@ export class MembershipService {
     }
 
     async findPending(organizationId: string) {
-        return this.findAll(organizationId, 'PENDING');
+        return this.findAll(organizationId, ['PENDING', 'REJECTED']);
     }
 
-    async approve(organizationId: string, id: string, adminId: string, data: { minutesBookEntry?: string, memberNumber?: string }) {
+    async countPending(organizationId: string): Promise<number> {
+        return this.prisma.membership.count({
+            where: {
+                organizationId,
+                status: 'PENDING'
+            }
+        });
+    }
+
+    async approve(organizationId: string, id: string, adminId: string, data: ApproveMembershipDto) {
         const membership = await this.prisma.membership.findFirst({
-            where: { id, organizationId }
+            where: { id, organizationId },
+            include: { user: { include: { userRoles: { include: { role: true } } } } }
         });
 
         if (!membership) {
@@ -67,6 +80,61 @@ export class MembershipService {
                 },
                 include: { user: true }
             });
+
+            // Reactivate the user in case they were previously rejected/deactivated
+            await tx.user.update({
+                where: { id: updated.userId },
+                data: { active: true }
+            });
+
+            // Role assignment: find PATIENT role
+            const patientRole = await tx.role.findFirst({ where: { name: RoleName.PATIENT } });
+            if (patientRole) {
+                const applicantRole = membership.user.userRoles.find(ur => ur.role.name === RoleName.APPLICANT);
+                if (applicantRole) {
+                    await tx.userRole.delete({
+                        where: { id: applicantRole.id }
+                    });
+                }
+
+                // Add PATIENT role
+                await tx.userRole.upsert({
+                    where: { userId_roleId: { userId: membership.userId, roleId: patientRole.id } },
+                    create: { userId: membership.userId, roleId: patientRole.id, isDefault: true },
+                    update: { isDefault: true }
+                });
+            }
+
+            // Update pending Reprocan records to ACTIVE or create new if provided
+            if (data.reprocanNumber) {
+                const existing = await tx.reprocanRecord.findFirst({
+                    where: { patientId: membership.userId, status: 'PENDING_VALIDATION' }
+                });
+                if (existing) {
+                    await tx.reprocanRecord.update({
+                        where: { id: existing.id },
+                        data: {
+                            status: 'ACTIVE',
+                            reprocanNumber: data.reprocanNumber,
+                            expirationDate: data.reprocanExpiration ? new Date(data.reprocanExpiration) : null
+                        }
+                    });
+                } else {
+                    await tx.reprocanRecord.create({
+                        data: {
+                            patientId: membership.userId,
+                            reprocanNumber: data.reprocanNumber,
+                            expirationDate: data.reprocanExpiration ? new Date(data.reprocanExpiration) : null,
+                            status: 'ACTIVE'
+                        }
+                    });
+                }
+            } else {
+                await tx.reprocanRecord.updateMany({
+                    where: { patientId: membership.userId, status: 'PENDING_VALIDATION' },
+                    data: { status: 'ACTIVE' }
+                });
+            }
 
             await this.auditService.recordEvent({
                 organizationId,
@@ -102,7 +170,7 @@ export class MembershipService {
         };
     }
 
-    async signDocument(userId: string, organizationId: string, type: 'application' | 'consent', ip: string) {
+    async signDocument(userId: string, organizationId: string, type: SignatureType, ip: string) {
         const membership = await this.prisma.membership.findFirst({
             where: { userId, organizationId }
         });
@@ -112,8 +180,8 @@ export class MembershipService {
         return this.prisma.membership.update({
             where: { id: membership.id },
             data: {
-                ...(type === 'application' && { applicationSignedAt: new Date() }),
-                ...(type === 'consent' && { dataConsentAcceptedAt: new Date() }),
+                ...(type === SignatureType.APPLICATION && { applicationSignedAt: new Date() }),
+                ...(type === SignatureType.CONSENT && { dataConsentAcceptedAt: new Date() }),
                 signatureIp: ip,
                 signatureMetadata: { userAgent: 'Browser Acceptance' }
             }
@@ -135,6 +203,12 @@ export class MembershipService {
                 data: {
                     status: 'REJECTED',
                 }
+            });
+
+            // Deactivate the user associated with this membership
+            await tx.user.update({
+                where: { id: membership.userId },
+                data: { active: false }
             });
 
             await this.auditService.recordEvent({

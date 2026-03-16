@@ -146,8 +146,8 @@ export class PdfService {
                 .lineTo(startX + 495, doc.y)
                 .stroke();
 
-            // Break page if it's too down
-            if (doc.y > doc.page.height - 100) {
+            // Break page if it's too down and there are more rows to draw
+            if (doc.y > doc.page.height - 100 && rowIndex < rows.length - 1) {
                 doc.addPage();
                 this.drawHeader(doc, 'Continuación...', '');
             }

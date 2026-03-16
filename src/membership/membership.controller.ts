@@ -5,6 +5,9 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { MembershipStatus } from '@prisma/client';
 import { ReportsService } from '../reports/reports.service';
 import { Response } from 'express';
+import { SignatureType } from '../common/enums';
+
+import { ApproveMembershipDto, SignMembershipDto } from './dto/membership.dto';
 
 @ApiTags('Membresías (ONG)')
 @ApiBearerAuth()
@@ -26,6 +29,13 @@ export class MembershipController {
     @ApiOperation({ summary: 'Listar aspirantes pendientes', description: 'Retorna solicitudes que esperan aprobación de Comisión' })
     findPending(@Request() req) {
         return this.membershipService.findPending(req.user.organizationId);
+    }
+
+    @Get('pending-count')
+    @ApiOperation({ summary: 'Contar aspirantes pendientes', description: 'Retorna la cantidad de solicitudes en estado PENDING para notificaciones visuales' })
+    async countPending(@Request() req) {
+        const count = await this.membershipService.countPending(req.user.organizationId);
+        return { count };
     }
 
     @Get('register-book')
@@ -102,7 +112,7 @@ export class MembershipController {
 
     @Post('sign')
     @ApiOperation({ summary: 'Firmar digitalmente', description: 'Registra la aceptación del usuario' })
-    sign(@Request() req, @Body() data: { type: 'application' | 'consent' }) {
+    sign(@Request() req, @Body() data: SignMembershipDto) {
         const ip = req.ip || req.connection.remoteAddress;
         return this.membershipService.signDocument(req.user.id, req.user.organizationId, data.type, ip);
     }
@@ -112,7 +122,7 @@ export class MembershipController {
     approve(
         @Request() req,
         @Param('id') id: string,
-        @Body() data: { minutesBookEntry?: string, memberNumber?: string }
+        @Body() data: ApproveMembershipDto
     ) {
         return this.membershipService.approve(req.user.organizationId, id, req.user.id, data);
     }

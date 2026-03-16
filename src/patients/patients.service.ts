@@ -22,8 +22,19 @@ export class PatientsService {
             where: { name: RoleName.PATIENT },
         });
         if (!role) {
-            // This case should be rare if seed is run, but keep for safety
             throw new NotFoundException('Rol PATIENT no encontrado');
+        }
+        return role.id;
+    }
+
+    private async getApplicantRoleId() {
+        let role = await this.prisma.role.findFirst({
+            where: { name: RoleName.APPLICANT },
+        });
+        if (!role) {
+            role = await this.prisma.role.create({
+                data: { name: RoleName.APPLICANT }
+            });
         }
         return role.id;
     }
@@ -64,7 +75,20 @@ export class PatientsService {
     }
 
     async create(organizationId: string, data: any, userId: string) {
-        const roleId = await this.getPatientRoleId();
+        const roleId = await this.getApplicantRoleId();
+
+        const validEmail = data.email && data.email.trim() !== '' ? data.email.trim() : null;
+
+        if (validEmail) {
+            const emailExists = await this.prisma.user.findUnique({
+                where: { email: validEmail }
+            });
+            if (emailExists) {
+                if (emailExists.organizationId !== organizationId || emailExists.documentNumber !== data.documentNumber) {
+                    throw new ConflictException('El correo electrónico ya se encuentra registrado');
+                }
+            }
+        }
 
         const existing = await this.prisma.user.findFirst({
             where: {
@@ -74,11 +98,11 @@ export class PatientsService {
             include: { userRoles: { include: { role: true } } },
         });
 
-        // Si ya existe y ya tiene rol PATIENT, error
+        // Si ya existe y ya tiene rol PATIENT o APPLICANT, error
         if (existing) {
-            const hasPatientRole = existing.userRoles.some(ur => ur.role.name === RoleName.PATIENT);
+            const hasPatientRole = existing.userRoles.some(ur => ur.role.name === RoleName.PATIENT || ur.role.name === RoleName.APPLICANT);
             if (hasPatientRole) {
-                throw new ConflictException('Este usuario ya está registrado como paciente');
+                throw new ConflictException('Este usuario ya está registrado como paciente o postulante');
             }
 
             // Si existe pero NO tiene rol PATIENT (es operario), le agregamos el rol
@@ -102,7 +126,7 @@ export class PatientsService {
                         patientId: existing.id,
                         reprocanNumber: data.reprocanNumber,
                         expirationDate: data.reprocanExpiration ? new Date(data.reprocanExpiration) : null,
-                        status: 'ACTIVE'
+                        status: 'PENDING_VALIDATION'
                     }, tx);
                 }
 
@@ -128,7 +152,7 @@ export class PatientsService {
                 data: {
                     fullName: data.fullName,
                     documentNumber: data.documentNumber,
-                    email: data.email || null,
+                    email: validEmail,
                     passwordHash: hashedPassword,
                     dailyDose: data.dailyDose,
                     address: data.address || null,
@@ -149,7 +173,7 @@ export class PatientsService {
                             create: {
                                 reprocanNumber: data.reprocanNumber,
                                 expirationDate: data.reprocanExpiration ? new Date(data.reprocanExpiration) : null,
-                                status: 'ACTIVE'
+                                status: 'PENDING_VALIDATION'
                             }
                         }
                     })
@@ -170,6 +194,120 @@ export class PatientsService {
         });
     }
 
+    async createPublicApplication(organizationId: string, data: any) {
+        const roleId = await this.getApplicantRoleId();
+
+        const validEmail = data.email && data.email.trim() !== '' ? data.email.trim() : null;
+
+        if (validEmail) {
+            const emailExists = await this.prisma.user.findUnique({
+                where: { email: validEmail }
+            });
+            if (emailExists) {
+                if (emailExists.organizationId !== organizationId || emailExists.documentNumber !== data.documentNumber) {
+                    throw new ConflictException('El correo electrónico ya se encuentra registrado');
+                }
+            }
+        }
+
+        const existing = await this.prisma.user.findFirst({
+            where: {
+                organizationId,
+                documentNumber: data.documentNumber,
+            },
+            include: { userRoles: { include: { role: true } } },
+        });
+
+        if (existing) {
+            const hasPatientRole = existing.userRoles.some(ur => ur.role.name === RoleName.PATIENT || ur.role.name === RoleName.APPLICANT);
+            if (hasPatientRole) {
+                throw new ConflictException('Este usuario ya está registrado como paciente o postulante');
+            }
+
+            return this.prisma.$transaction(async (tx) => {
+                await this.rolesService.assignRole(existing.id, roleId, false, tx);
+
+                const updatedUser = await tx.user.update({
+                    where: { id: existing.id },
+                    data: {
+                        dailyDose: data.dailyDose ?? existing.dailyDose,
+                        address: data.address ?? existing.address,
+                        phone: data.phone ?? existing.phone,
+                    },
+                    include: { userRoles: { include: { role: true } } },
+                });
+
+                if (data.reprocanNumber) {
+                    await this.reprocanService.createRecord({
+                        patientId: existing.id,
+                        reprocanNumber: data.reprocanNumber,
+                        expirationDate: data.reprocanExpiration ? new Date(data.reprocanExpiration) : null,
+                        status: 'PENDING_VALIDATION'
+                    }, tx);
+                }
+
+                await this.auditService.recordEvent({
+                    organizationId,
+                    entityType: 'Patient',
+                    entityId: existing.id,
+                    action: AuditAction.ADD_PATIENT_ROLE,
+                    newData: updatedUser,
+                    performedById: existing.id, // User is performing the action themselves
+                }, tx);
+
+                return updatedUser;
+            });
+        }
+
+        const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+
+        return this.prisma.$transaction(async (tx) => {
+            const patient = await tx.user.create({
+                data: {
+                    fullName: data.fullName,
+                    documentNumber: data.documentNumber,
+                    email: validEmail,
+                    passwordHash: hashedPassword,
+                    dailyDose: data.dailyDose,
+                    address: data.address || null,
+                    phone: data.phone || null,
+                    organizationId,
+                    requiresPasswordChange: true,
+                    userRoles: {
+                        create: { roleId, isDefault: true },
+                    },
+                    membership: {
+                        create: {
+                            organizationId,
+                            status: 'PENDING',
+                        }
+                    },
+                    ...(data.reprocanNumber && {
+                        reprocanRecords: {
+                            create: {
+                                reprocanNumber: data.reprocanNumber,
+                                expirationDate: data.reprocanExpiration ? new Date(data.reprocanExpiration) : null,
+                                status: 'PENDING_VALIDATION'
+                            }
+                        }
+                    })
+                },
+                include: { userRoles: { include: { role: true } } },
+            });
+
+            await this.auditService.recordEvent({
+                organizationId,
+                entityType: 'Patient',
+                entityId: patient.id,
+                action: AuditAction.CREATE_PATIENT,
+                newData: patient,
+                performedById: patient.id, // User is performing the action themselves
+            }, tx);
+
+            return patient;
+        });
+    }
+
     async findAll(organizationId: string) {
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -178,7 +316,7 @@ export class PatientsService {
         const patients = await this.prisma.user.findMany({
             where: {
                 organizationId,
-                userRoles: { some: { role: { name: RoleName.PATIENT } } }
+                userRoles: { some: { role: { name: { in: [RoleName.PATIENT, RoleName.APPLICANT] } } } }
             },
             include: {
                 dispensations: {

@@ -22,4 +22,5 @@ export {
 // Custom enums
 export { RoleName } from './role.enum';
 export { AuditAction } from './audit-action.enum';
+export { SignatureType } from './signature-type.enum';
 export { SYSTEM_ORGANIZATION } from './system.constants';
