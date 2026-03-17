@@ -24,6 +24,12 @@ export class DispensationsService {
             throw new BadRequestException('La dispensación debe tener al menos un item');
         }
 
+        // 0. Validar que la caja esté abierta (Regla de negocio: No se puede dispensar sin caja activa para ningún método de pago)
+        const activeSession = await this.cashRegisterService.getActiveSession(organizationId);
+        if (!activeSession) {
+            throw new BadRequestException('Debe abrir la caja antes de realizar una dispensación');
+        }
+
         // Calcular totales
         const totalEquivalentGrams = createDto.items.reduce((sum, item) => sum + item.equivalentDryGrams, 0);
         const subtotalRecovery = createDto.items.reduce((sum, item) => sum + item.totalRecoveryAmount, 0);
@@ -106,21 +112,18 @@ export class DispensationsService {
                 }, prisma);
             }
 
-            // 5. Registrar en Caja si el pago fue en efectivo y hay caja abierta usando CashRegisterService
+            // 5. Registrar en Caja si el pago fue en efectivo (ahora ya sabemos que activeSession existe)
             if (createDto.paymentMethod === 'CASH') {
-                const activeSession = await this.cashRegisterService.getActiveSession(organizationId);
-                if (activeSession) {
-                    await this.cashRegisterService.recordMovement({
-                        organizationId,
-                        sessionId: activeSession.id,
-                        movementType: 'INCOME',
-                        amount: totalRecoveryAmount,
-                        notes: `Dispensación #${dispensation.id.substring(0, 8)}`,
-                        referenceType: 'DISPENSATION',
-                        referenceId: dispensation.id,
-                        createdById: performedById,
-                    }, prisma);
-                }
+                await this.cashRegisterService.recordMovement({
+                    organizationId,
+                    sessionId: activeSession.id,
+                    movementType: 'INCOME',
+                    amount: totalRecoveryAmount,
+                    notes: `Dispensación #${dispensation.id.substring(0, 8)}`,
+                    referenceType: 'DISPENSATION',
+                    referenceId: dispensation.id,
+                    createdById: performedById,
+                }, prisma);
             }
 
             return dispensation;
